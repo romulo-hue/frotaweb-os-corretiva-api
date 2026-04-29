@@ -170,9 +170,9 @@ class MainActivity : Activity() {
                     "${apiUrl.text.toString().trim().trimEnd('/')}/os-corretiva?simulacao=false",
                     withCredentials(payload)
                 )
-                val body = JSONObject(response)
+                val body = response.asJsonOrThrow()
                 val created = body.optBoolean("created", false)
-                val message = body.optString("message", body.optString("detail", response))
+                val message = body.optString("message", body.optString("detail", response.body))
                 runOnUiThread {
                     if (created) {
                         store.markSynced(id, body.optString("order_number"))
@@ -215,7 +215,7 @@ class MainActivity : Activity() {
         return json
     }
 
-    private fun postJson(urlText: String, json: JSONObject): String {
+    private fun postJson(urlText: String, json: JSONObject): ApiResponse {
         val conn = (URL(urlText).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 30000
@@ -224,8 +224,10 @@ class MainActivity : Activity() {
             setRequestProperty("Content-Type", "application/json")
         }
         OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(json.toString()) }
+        val status = conn.responseCode
         val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
-        return BufferedReader(stream.reader(Charsets.UTF_8)).use { it.readText() }
+        val body = stream?.let { BufferedReader(it.reader(Charsets.UTF_8)).use { reader -> reader.readText() } } ?: ""
+        return ApiResponse(status, body)
     }
 
     private fun addOrderInput(root: LinearLayout, name: String, label: String, hint: String) {
@@ -300,6 +302,16 @@ class MainActivity : Activity() {
 }
 
 data class LocalOrder(val id: Long, val payload: String)
+
+data class ApiResponse(val status: Int, val body: String) {
+    fun asJsonOrThrow(): JSONObject {
+        val trimmed = body.trim()
+        if (!trimmed.startsWith("{")) {
+            throw IllegalStateException("API retornou HTTP $status sem JSON: ${trimmed.take(300)}")
+        }
+        return JSONObject(trimmed)
+    }
+}
 
 class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null, 1) {
     override fun onCreate(db: SQLiteDatabase) {
