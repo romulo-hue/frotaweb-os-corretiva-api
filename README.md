@@ -175,3 +175,21 @@ Depois do deploy, a tela fica em:
 ```text
 https://SEU-SERVICO.onrender.com/ui/
 ```
+
+## Aplicativo Android
+
+O projeto Android fica em:
+
+```text
+android-app/
+```
+
+Ele foi criado em Kotlin nativo e possui:
+
+- tela de login com URL da API, empresa, filial, usuario e senha;
+- tela de preenchimento da O.S. com campos obrigatorios indicados;
+- salvamento offline em SQLite local;
+- sincronizacao manual de pendentes;
+- exibicao do retorno de erro enviado pela API/FrotaWeb.
+
+Abra `android-app/` no Android Studio para compilar e gerar o APK.
