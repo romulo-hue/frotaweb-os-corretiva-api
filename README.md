@@ -108,11 +108,36 @@ Endpoints:
 
 - `GET http://127.0.0.1:8000/health`
 - `GET http://127.0.0.1:8000/docs`
-- `POST http://127.0.0.1:8000/os-corretiva?dry_run=true`
-- `POST http://127.0.0.1:8000/os-corretiva?dry_run=false`
+- `POST http://127.0.0.1:8000/os-corretiva?simulacao=true`
+- `POST http://127.0.0.1:8000/os-corretiva?simulacao=false`
 
-`dry_run=true` e o padrao e nao grava no FrotaWeb. `dry_run=false` faz login e
-envia a OS corretiva para o FrotaWeb.
+`simulacao=true` e o padrao e nao grava no FrotaWeb. `simulacao=false` faz login
+com as credenciais informadas na requisicao e envia a OS corretiva.
+
+Exemplo resumido de payload para gravacao real:
+
+```json
+{
+  "credentials": {
+    "empresa": "1",
+    "filial": "1",
+    "usuario": "232",
+    "senha": "senha-do-usuario"
+  },
+  "vehicle_code": "1682",
+  "plate": "RKH1F96",
+  "defect_description": "Falha informada pela operacao.",
+  "opening_datetime": "08/04/2026 16:20:00",
+  "entry_hourmeter": "0.00",
+  "odometer": "32873",
+  "exit_datetime": "10/04/2026 10:50:00",
+  "exit_hourmeter": "0.00",
+  "exit_odometer": "32873",
+  "start_datetime": "08/04/2026 16:20:00",
+  "expected_release_datetime": "10/04/2026 10:50:00",
+  "expected_hours": "0.00"
+}
+```
 
 ## Tela local
 
@@ -135,15 +160,15 @@ No Render, crie um Web Service apontando para o repositorio GitHub e configure:
 - Start command: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
 - Health check path: `/health`
 
-Configure as variaveis de ambiente no painel do Render, sem commitar `.env`:
+Configure apenas a URL base no painel do Render, sem commitar `.env`:
 
 ```text
 FROTAWEB_BASE_URL
-FROTAWEB_EMPRESA
-FROTAWEB_USUARIO
-FROTAWEB_FILIAL
-FROTAWEB_SENHA
 ```
+
+As credenciais do FrotaWeb (`empresa`, `filial`, `usuario` e `senha`) sao
+informadas pelo mecanico na tela a cada lancamento. A API usa a senha somente
+naquela requisicao e nao a retorna no JSON de resposta.
 
 Depois do deploy, a tela fica em:
 

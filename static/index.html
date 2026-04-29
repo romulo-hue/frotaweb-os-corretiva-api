@@ -10,8 +10,8 @@
     <main class="app-shell">
       <section class="topbar">
         <div>
-          <h1>Lançamento de O.S. corretiva</h1>
-          <p>TL11800 - Realização de Manutenção Corretiva. Login feito pela API usando o .env local.</p>
+          <h1>Lancamento de O.S. corretiva</h1>
+          <p>TL11800 - Realizacao de Manutencao Corretiva. Cada lancamento usa o login informado abaixo.</p>
         </div>
         <div class="api-status" id="api-status">Verificando API...</div>
       </section>
@@ -19,8 +19,36 @@
       <section class="layout">
         <form id="order-form" class="panel form-panel">
           <div class="panel-heading">
+            <h2>Login FrotaWeb</h2>
+            <span class="required-note">Usado somente nesta requisicao</span>
+          </div>
+
+          <div class="credentials-grid">
+            <div class="field" data-name="empresa">
+              <label for="empresa"><span>Empresa <span class="required">*</span></span></label>
+              <input type="text" id="empresa" name="empresa" autocomplete="organization" placeholder="1" required>
+              <small>FrotaWeb login: txtcd_empresa</small>
+            </div>
+            <div class="field" data-name="filial">
+              <label for="filial"><span>Filial <span class="required">*</span></span></label>
+              <input type="text" id="filial" name="filial" autocomplete="off" placeholder="1" required>
+              <small>FrotaWeb login: txtcd_filial</small>
+            </div>
+            <div class="field" data-name="usuario">
+              <label for="usuario"><span>Usuario <span class="required">*</span></span></label>
+              <input type="text" id="usuario" name="usuario" autocomplete="username" required>
+              <small>FrotaWeb login: txtcd_usuario</small>
+            </div>
+            <div class="field" data-name="senha">
+              <label for="senha"><span>Senha <span class="required">*</span></span></label>
+              <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+              <small>A senha nao aparece no preview nem na resposta</small>
+            </div>
+          </div>
+
+          <div class="panel-heading section-heading">
             <h2>Campos mapeados</h2>
-            <span class="required-note">Obrigatórios marcados com *</span>
+            <span class="required-note">Obrigatorios marcados com *</span>
           </div>
 
           <div class="field-grid" id="field-grid"></div>
@@ -47,7 +75,7 @@
         <aside class="panel side-panel">
           <div class="panel-heading">
             <h2>JSON gerado</h2>
-            <span id="mode-label">simulação</span>
+            <span id="mode-label">simulacao</span>
           </div>
           <pre id="json-preview">{}</pre>
 

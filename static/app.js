@@ -168,6 +168,7 @@ const dryRun = document.querySelector("#dry-run");
 const modeLabel = document.querySelector("#mode-label");
 const statusBox = document.querySelector("#api-status");
 const fillExample = document.querySelector("#fill-example");
+const credentialNames = ["empresa", "filial", "usuario", "senha"];
 
 function createFields() {
   grid.innerHTML = "";
@@ -200,6 +201,13 @@ function createFields() {
 
 function payloadFromForm() {
   const payload = {};
+  const credentials = {};
+  for (const name of credentialNames) {
+    const value = form.elements[name].value.trim();
+    if (value !== "") credentials[name] = value;
+  }
+  if (Object.keys(credentials).length > 0) payload.credentials = credentials;
+
   for (const field of fields) {
     const value = form.elements[field.name].value.trim();
     if (value !== "") payload[field.name] = value;
@@ -212,10 +220,18 @@ function payloadFromForm() {
   return payload;
 }
 
+function previewPayloadFromForm() {
+  const payload = payloadFromForm();
+  if (payload.credentials?.senha) {
+    payload.credentials = { ...payload.credentials, senha: "********" };
+  }
+  return payload;
+}
+
 function updatePreview() {
   modeLabel.textContent = dryRun.checked ? "simulacao" : "gravacao real";
   modeLabel.className = dryRun.checked ? "" : "warning";
-  jsonPreview.textContent = JSON.stringify(payloadFromForm(), null, 2);
+  jsonPreview.textContent = JSON.stringify(previewPayloadFromForm(), null, 2);
 }
 
 function fillFromPayload(payload) {
@@ -230,6 +246,13 @@ function fillFromPayload(payload) {
 
 function markInvalidFields() {
   let ok = true;
+  for (const name of credentialNames) {
+    const wrapper = form.querySelector(`[data-name="${name}"]`);
+    const input = form.elements[name];
+    const invalid = input.value.trim() === "";
+    wrapper.classList.toggle("invalid", invalid);
+    if (invalid) ok = false;
+  }
   for (const field of fields) {
     const wrapper = grid.querySelector(`[data-name="${field.name}"]`);
     const input = form.elements[field.name];
@@ -299,5 +322,8 @@ fillFromPayload(examplePayload);
 checkApi();
 
 form.addEventListener("submit", submitOrder);
+for (const name of credentialNames) {
+  form.elements[name].addEventListener("input", updatePreview);
+}
 dryRun.addEventListener("change", updatePreview);
 fillExample.addEventListener("click", () => fillFromPayload(examplePayload));

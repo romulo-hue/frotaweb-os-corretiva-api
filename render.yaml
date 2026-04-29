@@ -9,11 +9,3 @@ services:
     envVars:
       - key: FROTAWEB_BASE_URL
         sync: false
-      - key: FROTAWEB_EMPRESA
-        sync: false
-      - key: FROTAWEB_USUARIO
-        sync: false
-      - key: FROTAWEB_FILIAL
-        sync: false
-      - key: FROTAWEB_SENHA
-        sync: false

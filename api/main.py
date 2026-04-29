@@ -21,9 +21,19 @@ MAPPING_PATH = ROOT_DIR / "config" / "os_correctiva.tl11800.json"
 STATIC_DIR = ROOT_DIR / "static"
 
 
+class FrotaWebCredentials(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    empresa: str = Field(..., examples=["1"])
+    usuario: str = Field(..., examples=["232"])
+    senha: str = Field(..., repr=False)
+    filial: str = Field("0", examples=["1"])
+
+
 class CorrectiveOrderRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    credentials: FrotaWebCredentials | None = Field(None, alias="credenciais")
     vehicle_code: str = Field(..., alias="codigo_veiculo", examples=["0973"])
     defect_description: str = Field(..., alias="descricao_defeito", examples=["Falha mecanica informada pela operacao."])
     order_number: str | None = Field(None, alias="numero_os")
@@ -87,7 +97,7 @@ def health() -> dict[str, str]:
 @app.get("/config/status", response_model=LoginStatus)
 def config_status() -> LoginStatus:
     load_dotenv(ROOT_DIR / ".env")
-    required = ["FROTAWEB_BASE_URL", "FROTAWEB_EMPRESA", "FROTAWEB_USUARIO", "FROTAWEB_SENHA"]
+    required = ["FROTAWEB_BASE_URL"]
     missing = [name for name in required if not os.environ.get(name)]
     return LoginStatus(configured=not missing, missing_env=missing)
 
@@ -111,13 +121,14 @@ def create_corrective_order(
     ),
 ) -> dict[str, Any]:
     mapping = load_mapping()
-    order = CorrectiveOrder.from_dict(with_tl11800_defaults(payload.model_dump(exclude_none=True, by_alias=False)))
+    payload_data = payload.model_dump(exclude_none=True, by_alias=False, exclude={"credentials"})
+    order = CorrectiveOrder.from_dict(with_tl11800_defaults(payload_data))
     service = CorrectiveOrderService(FrotaWebClient(), mapping)
 
     if dry_run:
         return build_dry_run_response(service, mapping, order)
 
-    client = make_logged_client()
+    client = make_logged_client(payload.credentials)
     service = CorrectiveOrderService(client, mapping)
     try:
         result = service.create(order)
@@ -211,22 +222,40 @@ def with_tl11800_defaults(data: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
-def make_logged_client() -> FrotaWebClient:
+def make_logged_client(credentials: FrotaWebCredentials | None = None) -> FrotaWebClient:
     load_dotenv(ROOT_DIR / ".env")
-    required = ["FROTAWEB_BASE_URL", "FROTAWEB_EMPRESA", "FROTAWEB_USUARIO", "FROTAWEB_SENHA"]
-    missing = [name for name in required if not os.environ.get(name)]
-    if missing:
+    base_url = os.environ.get("FROTAWEB_BASE_URL")
+    if not base_url:
         raise HTTPException(
             status_code=500,
-            detail="Variaveis ausentes no .env: " + ", ".join(missing),
+            detail="Variavel ausente no ambiente: FROTAWEB_BASE_URL",
         )
 
-    client = FrotaWebClient(os.environ["FROTAWEB_BASE_URL"])
+    if credentials is None:
+        required = ["FROTAWEB_EMPRESA", "FROTAWEB_USUARIO", "FROTAWEB_SENHA"]
+        missing = [name for name in required if not os.environ.get(name)]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Credenciais do FrotaWeb ausentes na requisicao. "
+                    "Informe credenciais.empresa, credenciais.usuario, "
+                    "credenciais.senha e credenciais.filial."
+                ),
+            )
+        credentials = FrotaWebCredentials(
+            empresa=os.environ["FROTAWEB_EMPRESA"],
+            usuario=os.environ["FROTAWEB_USUARIO"],
+            senha=os.environ["FROTAWEB_SENHA"],
+            filial=os.environ.get("FROTAWEB_FILIAL", "0"),
+        )
+
+    client = FrotaWebClient(base_url)
     login = client.login(
-        empresa=os.environ["FROTAWEB_EMPRESA"],
-        usuario=os.environ["FROTAWEB_USUARIO"],
-        senha=os.environ["FROTAWEB_SENHA"],
-        filial=os.environ.get("FROTAWEB_FILIAL", "0"),
+        empresa=credentials.empresa,
+        usuario=credentials.usuario,
+        senha=credentials.senha,
+        filial=credentials.filial,
     )
     if not login.logged_in:
         raise HTTPException(status_code=401, detail=login.message)
