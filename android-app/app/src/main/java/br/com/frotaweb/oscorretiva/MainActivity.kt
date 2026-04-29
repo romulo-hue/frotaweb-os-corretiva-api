@@ -10,7 +10,10 @@ import android.graphics.Typeface
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
+import android.text.Editable
+import android.text.InputFilter
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
@@ -36,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var senha: EditText
 
     private val orderInputs = linkedMapOf<String, EditText>()
+    private val orderFormats = linkedMapOf<String, FieldFormat>()
     private val checks = linkedMapOf<String, CheckBox>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,25 +93,25 @@ class MainActivity : Activity() {
         root.addView(title("Nova O.S. corretiva"))
         root.addView(note("Campos com * sao obrigatorios. O app salva offline se estiver sem internet."))
 
-        addOrderInput(root, "vehicle_code", "Veiculo *", "Ex.: 1682")
+        addOrderInput(root, "vehicle_code", "Veiculo *", "Ex.: 1682", FieldFormat.INTEGER)
         addOrderInput(root, "plate", "Placa", "Ex.: RKH1F96")
-        addOrderInput(root, "defect_description", "Reclamacao livre *", "Descreva a falha")
-        addOrderInput(root, "opening_datetime", "Entrada - Data/Hora *", "dd/MM/aaaa HH:mm:ss")
-        addOrderInput(root, "entry_hourmeter", "Entrada - Horimetro *", "0.00")
-        addOrderInput(root, "odometer", "Entrada - Km *", "32873")
-        addOrderInput(root, "exit_datetime", "Saida - Data/Hora *", "dd/MM/aaaa HH:mm:ss")
-        addOrderInput(root, "exit_hourmeter", "Saida - Horimetro *", "0.00")
-        addOrderInput(root, "exit_odometer", "Saida - Km *", "32873")
-        addOrderInput(root, "start_datetime", "Data prevista para inicio *", "dd/MM/aaaa HH:mm:ss")
-        addOrderInput(root, "expected_release_datetime", "Data prevista de liberacao *", "dd/MM/aaaa HH:mm:ss")
-        addOrderInput(root, "expected_hours", "Horas previstas *", "0.00")
-        addOrderInput(root, "actual_hours", "Horas realizadas", "0.00")
-        addOrderInput(root, "branch_code", "Filial da OS", "Ex.: 3")
-        addOrderInput(root, "department_code", "Departamento", "Ex.: 420112")
-        addOrderInput(root, "occurrence_number", "Ocorrencia", "0")
-        addOrderInput(root, "driver_code", "Motorista", "0")
-        addOrderInput(root, "surcharge_value", "Valor acrescimo", "0")
-        addOrderInput(root, "return_order_number", "O.S retorno", "0")
+        addOrderInput(root, "defect_description", "Reclamacao livre", "Descreva a falha")
+        addOrderInput(root, "opening_datetime", "Entrada - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
+        addOrderInput(root, "entry_hourmeter", "Entrada - Horimetro *", "0.00", FieldFormat.DECIMAL)
+        addOrderInput(root, "odometer", "Entrada - Km *", "103.345", FieldFormat.KM)
+        addOrderInput(root, "exit_datetime", "Saida - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
+        addOrderInput(root, "exit_hourmeter", "Saida - Horimetro *", "0.00", FieldFormat.DECIMAL)
+        addOrderInput(root, "exit_odometer", "Saida - Km *", "103.345", FieldFormat.KM)
+        addOrderInput(root, "start_datetime", "Data prevista para inicio *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
+        addOrderInput(root, "expected_release_datetime", "Data prevista de liberacao *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
+        addOrderInput(root, "expected_hours", "Horas previstas", "0.00", FieldFormat.DECIMAL)
+        addOrderInput(root, "actual_hours", "Horas realizadas", "0.00", FieldFormat.DECIMAL)
+        addOrderInput(root, "branch_code", "Filial da OS", "Ex.: 3", FieldFormat.INTEGER)
+        addOrderInput(root, "department_code", "Departamento", "Ex.: 420112", FieldFormat.INTEGER)
+        addOrderInput(root, "occurrence_number", "Ocorrencia", "0", FieldFormat.INTEGER)
+        addOrderInput(root, "driver_code", "Motorista", "0", FieldFormat.INTEGER)
+        addOrderInput(root, "surcharge_value", "Valor acrescimo", "0", FieldFormat.DECIMAL)
+        addOrderInput(root, "return_order_number", "O.S retorno", "0", FieldFormat.INTEGER)
         addOrderInput(root, "observations", "Observacao (max 50)", "")
 
         root.addView(subtitle("Marcadores opcionais"))
@@ -130,13 +134,18 @@ class MainActivity : Activity() {
 
     private fun saveAndSend() {
         val requiredNames = listOf(
-            "vehicle_code", "defect_description", "opening_datetime", "entry_hourmeter",
+            "vehicle_code", "opening_datetime", "entry_hourmeter",
             "odometer", "exit_datetime", "exit_hourmeter", "exit_odometer",
-            "start_datetime", "expected_release_datetime", "expected_hours"
+            "start_datetime", "expected_release_datetime"
         )
         val missing = requiredNames.filter { orderInputs[it]?.text.toString().trim().isEmpty() }
         if (missing.isNotEmpty()) {
             showMessage("Campos obrigatorios", "Preencha todos os campos marcados com *.")
+            return
+        }
+        val invalid = invalidFormats()
+        if (invalid.isNotEmpty()) {
+            showMessage("Formato invalido", "Corrija os campos: ${invalid.joinToString(", ")}.")
             return
         }
 
@@ -195,7 +204,7 @@ class MainActivity : Activity() {
     private fun buildOrderPayload(): JSONObject {
         val json = JSONObject()
         orderInputs.forEach { (name, edit) ->
-            val value = edit.text.toString().trim()
+            val value = payloadValue(name, edit.text.toString().trim(), orderFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
         }
         checks.forEach { (name, check) ->
@@ -230,11 +239,86 @@ class MainActivity : Activity() {
         return ApiResponse(status, body)
     }
 
-    private fun addOrderInput(root: LinearLayout, name: String, label: String, hint: String) {
-        val edit = input(label, "", InputType.TYPE_CLASS_TEXT, hint)
+    private fun addOrderInput(root: LinearLayout, name: String, label: String, hint: String, format: FieldFormat = FieldFormat.TEXT) {
+        val edit = input(label, "", inputTypeFor(format), hint)
+        applyFormat(edit, format)
         orderInputs[name] = edit
+        orderFormats[name] = format
         root.addView(edit)
     }
+
+    private fun inputTypeFor(format: FieldFormat): Int = when (format) {
+        FieldFormat.DATETIME, FieldFormat.INTEGER, FieldFormat.KM -> InputType.TYPE_CLASS_NUMBER
+        FieldFormat.DECIMAL -> InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        FieldFormat.TEXT -> InputType.TYPE_CLASS_TEXT
+    }
+
+    private fun applyFormat(edit: EditText, format: FieldFormat) {
+        when (format) {
+            FieldFormat.DATETIME -> {
+                edit.filters = arrayOf(InputFilter.LengthFilter(19))
+                edit.addTextChangedListener(maskWatcher(edit, ::formatDateTimeDigits))
+            }
+            FieldFormat.KM -> edit.addTextChangedListener(maskWatcher(edit, ::formatThousandsDigits))
+            else -> Unit
+        }
+    }
+
+    private fun maskWatcher(edit: EditText, formatter: (String) -> String) = object : TextWatcher {
+        private var editing = false
+
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+
+        override fun afterTextChanged(s: Editable?) {
+            if (editing) return
+            editing = true
+            val formatted = formatter(s?.toString().orEmpty().digitsOnly())
+            edit.setText(formatted)
+            edit.setSelection(formatted.length)
+            editing = false
+        }
+    }
+
+    private fun formatDateTimeDigits(digits: String): String {
+        val value = digits.take(14)
+        val output = StringBuilder()
+        value.forEachIndexed { index, char ->
+            if (index == 2 || index == 4) output.append('/')
+            if (index == 8) output.append(' ')
+            if (index == 10 || index == 12) output.append(':')
+            output.append(char)
+        }
+        return output.toString()
+    }
+
+    private fun formatThousandsDigits(digits: String): String {
+        if (digits.isBlank()) return ""
+        return digits.reversed().chunked(3).joinToString(".").reversed()
+    }
+
+    private fun invalidFormats(): List<String> {
+        return orderInputs.mapNotNull { (name, edit) ->
+            val value = edit.text.toString().trim()
+            if (value.isBlank()) return@mapNotNull null
+            val valid = when (orderFormats[name] ?: FieldFormat.TEXT) {
+                FieldFormat.DATETIME -> value.length == 19
+                FieldFormat.DECIMAL -> value.replace(',', '.').matches(Regex("""\d+(\.\d{1,2})?"""))
+                FieldFormat.INTEGER -> value.digitsOnly() == value
+                FieldFormat.KM -> value.digitsOnly().isNotBlank()
+                FieldFormat.TEXT -> true
+            }
+            if (valid) null else edit.hint.toString().substringBefore(" - ")
+        }
+    }
+
+    private fun payloadValue(name: String, value: String, format: FieldFormat): String = when (format) {
+        FieldFormat.KM -> value.digitsOnly()
+        FieldFormat.DECIMAL -> value.replace(',', '.')
+        else -> value
+    }
+
+    private fun String.digitsOnly(): String = filter { it.isDigit() }
 
     private fun addCheck(root: LinearLayout, name: String, label: String) {
         val check = CheckBox(this).apply { text = label; textSize = 16f }
@@ -302,6 +386,14 @@ class MainActivity : Activity() {
 }
 
 data class LocalOrder(val id: Long, val payload: String)
+
+enum class FieldFormat {
+    TEXT,
+    DATETIME,
+    DECIMAL,
+    INTEGER,
+    KM
+}
 
 data class ApiResponse(val status: Int, val body: String) {
     fun asJsonOrThrow(): JSONObject {
