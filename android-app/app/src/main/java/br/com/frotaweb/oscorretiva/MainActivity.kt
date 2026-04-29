@@ -140,7 +140,7 @@ class MainActivity : Activity() {
             return
         }
 
-        val payload = buildPayload()
+        val payload = buildOrderPayload()
         val id = store.insert(payload.toString())
         if (!isOnline()) {
             showMessage("Salvo offline", "Sem internet. A O.S. ficou pendente para sincronizacao.")
@@ -166,7 +166,10 @@ class MainActivity : Activity() {
     private fun sendOrder(id: Long, payload: JSONObject) {
         Thread {
             try {
-                val response = postJson("${apiUrl.text.toString().trim().trimEnd('/')}/os-corretiva?simulacao=false", payload)
+                val response = postJson(
+                    "${apiUrl.text.toString().trim().trimEnd('/')}/os-corretiva?simulacao=false",
+                    withCredentials(payload)
+                )
                 val body = JSONObject(response)
                 val created = body.optBoolean("created", false)
                 val message = body.optString("message", body.optString("detail", response))
@@ -189,14 +192,8 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun buildPayload(): JSONObject {
+    private fun buildOrderPayload(): JSONObject {
         val json = JSONObject()
-        json.put("credentials", JSONObject().apply {
-            put("empresa", empresa.text.toString().trim())
-            put("filial", filial.text.toString().trim())
-            put("usuario", usuario.text.toString().trim())
-            put("senha", currentPassword)
-        })
         orderInputs.forEach { (name, edit) ->
             val value = edit.text.toString().trim()
             if (value.isNotEmpty()) json.put(name, value)
@@ -204,6 +201,17 @@ class MainActivity : Activity() {
         checks.forEach { (name, check) ->
             if (check.isChecked) json.put(name, true)
         }
+        return json
+    }
+
+    private fun withCredentials(orderPayload: JSONObject): JSONObject {
+        val json = JSONObject(orderPayload.toString())
+        json.put("credentials", JSONObject().apply {
+            put("empresa", empresa.text.toString().trim())
+            put("filial", filial.text.toString().trim())
+            put("usuario", usuario.text.toString().trim())
+            put("senha", currentPassword)
+        })
         return json
     }
 
