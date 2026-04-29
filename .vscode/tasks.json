@@ -1,0 +1,52 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Android: assembleDebug",
+      "type": "shell",
+      "command": "if (Test-Path .\\gradlew.bat) { .\\gradlew.bat :app:assembleDebug } else { gradle :app:assembleDebug }",
+      "options": {
+        "cwd": "${workspaceFolder}\\android-app",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Android: installDebug",
+      "type": "shell",
+      "command": "if (Test-Path .\\gradlew.bat) { .\\gradlew.bat :app:installDebug } else { gradle :app:installDebug }",
+      "options": {
+        "cwd": "${workspaceFolder}\\android-app",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "dependsOn": ["Android: assembleDebug"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Android: launch app",
+      "type": "shell",
+      "command": "adb shell am start -n br.com.frotaweb.oscorretiva/.MainActivity",
+      "problemMatcher": []
+    },
+    {
+      "label": "Android: logcat app",
+      "type": "shell",
+      "command": "adb logcat | Select-String -Pattern 'br.com.frotaweb.oscorretiva|AndroidRuntime|FATAL EXCEPTION'",
+      "options": {
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

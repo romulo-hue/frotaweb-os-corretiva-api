@@ -193,3 +193,7 @@ Ele foi criado em Kotlin nativo e possui:
 - exibicao do retorno de erro enviado pela API/FrotaWeb.
 
 Abra `android-app/` no Android Studio para compilar e gerar o APK.
+
+Tambem deixei arquivos em `.vscode/` para build/install/logcat e uma
+configuracao `Android: Debug app`. Para usar pelo VS Code, a maquina precisa ter
+JDK, Android SDK/ADB e Gradle/Gradle Wrapper instalados.
