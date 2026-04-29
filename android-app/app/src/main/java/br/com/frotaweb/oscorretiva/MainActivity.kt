@@ -65,8 +65,10 @@ class MainActivity : Activity() {
         enter.setOnClickListener {
             if (required(apiUrl, empresa, filial, usuario, senha)) {
                 currentPassword = senha.text.toString()
+                val normalizedApiUrl = normalizeApiBaseUrl(apiUrl.text.toString())
+                apiUrl.setText(normalizedApiUrl)
                 prefs.edit()
-                    .putString("apiUrl", apiUrl.text.toString().trim().trimEnd('/'))
+                    .putString("apiUrl", normalizedApiUrl)
                     .putString("empresa", empresa.text.toString().trim())
                     .putString("filial", filial.text.toString().trim())
                     .putString("usuario", usuario.text.toString().trim())
@@ -175,11 +177,12 @@ class MainActivity : Activity() {
     private fun sendOrder(id: Long, payload: JSONObject) {
         Thread {
             try {
+                val endpoint = "${normalizeApiBaseUrl(apiUrl.text.toString())}/os-corretiva?simulacao=false"
                 val response = postJson(
-                    "${apiUrl.text.toString().trim().trimEnd('/')}/os-corretiva?simulacao=false",
+                    endpoint,
                     withCredentials(payload)
                 )
-                val body = response.asJsonOrThrow()
+                val body = response.asJsonOrThrow(endpoint)
                 val created = body.optBoolean("created", false)
                 val message = body.optString("message", body.optString("detail", response.body))
                 runOnUiThread {
@@ -222,6 +225,20 @@ class MainActivity : Activity() {
             put("senha", currentPassword)
         })
         return json
+    }
+
+    private fun normalizeApiBaseUrl(rawUrl: String): String {
+        var url = rawUrl.trim()
+        if (url.endsWith("/")) url = url.trimEnd('/')
+        url = url.substringBefore("?")
+        val lower = url.lowercase()
+        val suffixes = listOf("/docs", "/redoc", "/openapi.json", "/os-corretiva")
+        suffixes.forEach { suffix ->
+            if (lower.endsWith(suffix)) {
+                url = url.dropLast(suffix.length).trimEnd('/')
+            }
+        }
+        return url
     }
 
     private fun postJson(urlText: String, json: JSONObject): ApiResponse {
@@ -396,10 +413,10 @@ enum class FieldFormat {
 }
 
 data class ApiResponse(val status: Int, val body: String) {
-    fun asJsonOrThrow(): JSONObject {
+    fun asJsonOrThrow(endpoint: String): JSONObject {
         val trimmed = body.trim()
         if (!trimmed.startsWith("{")) {
-            throw IllegalStateException("API retornou HTTP $status sem JSON: ${trimmed.take(300)}")
+            throw IllegalStateException("API retornou HTTP $status sem JSON em $endpoint: ${trimmed.take(300)}")
         }
         return JSONObject(trimmed)
     }
