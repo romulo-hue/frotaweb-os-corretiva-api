@@ -142,12 +142,15 @@ class CorrectiveOrderService:
         response = self.client.post(action, data=fields, params=self.mapping.get("submit_query"))
 
         iis_error = extract_iis_error(response.text)
+        km_warning = extract_km_warning(response.text)
         order_number = extract_order_number(response.text)
-        alerts = [] if order_number else extract_alerts(response.text)
+        alerts = [] if (order_number or km_warning) else extract_alerts(response.text)
         session_ok = self.client.check_session()
-        ok = not alerts and not iis_error and session_ok and bool(order_number)
+        ok = not alerts and not iis_error and not km_warning and session_ok and bool(order_number)
         if iis_error:
             message = "Erro IIS do FrotaWeb ao salvar OS: " + iis_error
+        elif km_warning:
+            message = "OS nao gravada: critica de KM/Horimetro do FrotaWeb: " + km_warning
         elif alerts:
             message = " | ".join(alerts)
         elif order_number:
@@ -385,4 +388,18 @@ def extract_iis_error(html: str) -> str | None:
         return None
     text = re.sub(r"<[^>]+>", " ", match.group(1))
     text = re.sub(r"\s+", " ", text).strip()
+    return text or None
+
+
+def extract_km_warning(html: str) -> str | None:
+    match = re.search(r"critica_km\('([^']+)'", html, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    text = match.group(1)
+    text = text.replace("\\n", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    try:
+        text = text.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
+    except UnicodeError:
+        pass
     return text or None
