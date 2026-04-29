@@ -1,0 +1,22 @@
+{
+  "vehicle_code": "1830",
+  "plate": "THP2B33",
+  "defect_description": "Teste de integracao local - falha mecanica informada pela operacao.",
+  "opening_datetime": "12/03/2026 15:45:00",
+  "entry_hourmeter": "0.00",
+  "odometer": "5",
+  "exit_datetime": "12/03/2026 15:55:00",
+  "exit_hourmeter": "0.00",
+  "exit_odometer": "5",
+  "start_datetime": "12/03/2026 15:45:00",
+  "expected_release_datetime": "12/03/2026 15:55:00",
+  "expected_hours": "0.00",
+  "actual_hours": "0.00",
+  "branch_code": "4",
+  "department_code": "420115",
+  "occurrence_number": "0",
+  "driver_code": "0",
+  "surcharge_value": "0",
+  "return_order_number": "0",
+  "observations": ""
+}

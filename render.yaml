@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: frotaweb-os-corretiva-api
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: FROTAWEB_BASE_URL
+        sync: false
+      - key: FROTAWEB_EMPRESA
+        sync: false
+      - key: FROTAWEB_USUARIO
+        sync: false
+      - key: FROTAWEB_FILIAL
+        sync: false
+      - key: FROTAWEB_SENHA
+        sync: false

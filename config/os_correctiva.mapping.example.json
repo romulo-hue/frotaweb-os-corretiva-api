@@ -1,0 +1,29 @@
+{
+  "screen_path": "Telas/TLxxxxx.asp",
+  "form_index": 0,
+  "open_query": {
+    "acao": "incluir"
+  },
+  "submit_query": {
+    "acao": "gravar"
+  },
+  "submit_path": "Telas/TLxxxxx.asp",
+  "required_field_map": [
+    "vehicle_code",
+    "defect_description"
+  ],
+  "field_map": {
+    "vehicle_code": "txtcd_veiculo",
+    "defect_description": "txtds_defeito",
+    "opening_date": "txtdt_abertura",
+    "odometer": "txtnr_hodometro",
+    "branch_code": "txtcd_filial",
+    "workshop_code": "txtcd_oficina",
+    "service_code": "txtcd_servico",
+    "requester_code": "txtcd_solicitante",
+    "observations": "txtds_observacao"
+  },
+  "extra_fields": {
+    "hidacao": "gravar"
+  }
+}

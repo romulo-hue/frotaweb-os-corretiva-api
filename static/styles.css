@@ -1,0 +1,287 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --line: #ccd5df;
+  --text: #18212b;
+  --muted: #5d6b7a;
+  --blue: #245ca8;
+  --blue-dark: #17457f;
+  --red: #b42318;
+  --green: #157347;
+  --amber: #a35a00;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  width: min(1440px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 18px 0 28px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0 18px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 16px;
+}
+
+.topbar p,
+.required-note,
+.field small,
+.api-status,
+#mode-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.api-status {
+  min-width: 150px;
+  text-align: right;
+  font-weight: 700;
+}
+
+.api-status.ok {
+  color: var(--green);
+}
+
+.api-status.fail {
+  color: var(--red);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(620px, 1.35fr) minmax(420px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+
+.form-panel {
+  padding: 16px;
+}
+
+.side-panel {
+  padding: 16px;
+  position: sticky;
+  top: 12px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  min-width: 0;
+}
+
+.field label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field .required {
+  color: var(--red);
+}
+
+.field small {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #aeb8c4;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  background: #fff;
+}
+
+textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus {
+  outline: 2px solid rgba(36, 92, 168, 0.25);
+  border-color: var(--blue);
+}
+
+.invalid input,
+.invalid textarea {
+  border-color: var(--red);
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.checks {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.checks legend {
+  padding: 0 6px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.checks label,
+.toggle {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+button {
+  height: 36px;
+  border: 1px solid #9aa8b7;
+  border-radius: 6px;
+  background: #eef2f6;
+  color: var(--text);
+  padding: 0 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #e2e8f0;
+}
+
+button.primary {
+  background: var(--blue);
+  border-color: var(--blue-dark);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--blue-dark);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+pre {
+  margin: 0;
+  background: #101828;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 12px;
+  font: 12px/1.45 Consolas, "Courier New", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 45vh;
+  overflow: auto;
+}
+
+.result-heading {
+  margin-top: 16px;
+}
+
+.success {
+  color: var(--green);
+}
+
+.warning {
+  color: var(--amber);
+}
+
+.error {
+  color: var(--red);
+}
+
+@media (max-width: 980px) {
+  .layout,
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .side-panel {
+    position: static;
+  }
+
+  .checks {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .actions,
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .api-status {
+    text-align: left;
+  }
+}

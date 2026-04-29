@@ -1,0 +1,8 @@
+.env
+*.log
+*.tmp
+__pycache__/
+*.pyc
+response*.html
+cookies*.txt
+artifacts/

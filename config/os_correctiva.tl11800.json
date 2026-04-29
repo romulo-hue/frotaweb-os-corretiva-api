@@ -1,0 +1,146 @@
+{
+  "screen_path": "Telas/TL11800.asp",
+  "form_index": 0,
+  "open_query": {},
+  "prepare_new_fields": {
+    "hidstatusreg": "4"
+  },
+  "prepare_path": "Telas/TL11800.asp",
+  "pre_submit_steps": [
+    {
+      "name": "validar_veiculo",
+      "path": "Telas/TL11800.asp",
+      "query": {
+        "acao": "cd_veiculo"
+      },
+      "field_map": {
+        "vehicle_code": "txtcd_veiculo"
+      }
+    },
+    {
+      "name": "validar_entrada",
+      "path": "Telas/TL11800.asp",
+      "query": {
+        "acao": "dh_entrada"
+      },
+      "field_map": {
+        "opening_datetime": "txtdh_entrada",
+        "entry_hourmeter": "txtqt_hr_ent",
+        "odometer": "txtqt_km_ent"
+      }
+    },
+    {
+      "name": "validar_saida",
+      "path": "Telas/TL11800.asp",
+      "query": {
+        "acao": "dh_saida"
+      },
+      "field_map": {
+        "exit_datetime": "txtdh_saida",
+        "exit_hourmeter": "txtqt_hr_sai",
+        "exit_odometer": "txtqt_km_sai"
+      }
+    }
+  ],
+  "submit_query": {},
+  "submit_path": "Telas/TL11800.asp",
+  "required_field_map": [
+    "vehicle_code",
+    "opening_datetime",
+    "entry_hourmeter",
+    "odometer",
+    "exit_datetime",
+    "exit_hourmeter",
+    "exit_odometer",
+    "start_datetime",
+    "expected_release_datetime",
+    "expected_hours"
+  ],
+  "screen_labels": {
+    "vehicle_code": "Veiculo",
+    "plate": "Placa",
+    "component": "Componente",
+    "opening_datetime": "Entrada - Data/Hora",
+    "odometer": "Entrada - Km's",
+    "hourmeter": "Entrada - Horimetro",
+    "release_datetime": "Data Prevista de Liberacao",
+    "branch_code": "Filial",
+    "department_code": "Departamento",
+    "driver_code": "Motorista",
+    "contract_number": "Contrato No",
+    "return_order": "O.S Retorno",
+    "observations": "Observacao",
+    "defect_description": "Reclamacao/Reclamacao Livre"
+  },
+  "field_map": {
+    "vehicle_code": "txtcd_veiculo",
+    "plate": "txtplaca",
+    "opening_datetime": "txtdh_entrada",
+    "entry_hourmeter": "txtqt_hr_ent",
+    "odometer": "txtqt_km_ent",
+    "exit_datetime": "txtdh_saida",
+    "exit_hourmeter": "txtqt_hr_sai",
+    "exit_odometer": "txtqt_km_sai",
+    "start_datetime": "txtdh_inicio",
+    "expected_release_datetime": "txtdh_prev",
+    "expected_hours": "txtqt_hr_prev",
+    "actual_hours": "txtqt_hr_rea",
+    "branch_code": "txtcd_filial",
+    "department_code": "txtcd_ccusto",
+    "occurrence_number": "txtnr_ocorr",
+    "driver_code": "txtcd_moto",
+    "surcharge_value": "txtvl_acresc",
+    "return_order_number": "txtnr_os_ret",
+    "observations": "txtnm_observ"
+  },
+  "derived_hidden_field_map": {
+    "opening_datetime": "hiddh_entrada",
+    "exit_datetime": "hiddh_saida",
+    "opening_datetime_old": "hiddh_entrada_old",
+    "exit_datetime_old": "hiddh_saida_old",
+    "odometer_old": "hidqt_km_ent_old",
+    "exit_odometer_old": "hidqt_km_sai_old",
+    "entry_hourmeter_old": "hidqt_hr_ent_old",
+    "exit_hourmeter_old": "hidqt_hr_sai_old",
+    "branch_code": "hidcd_filialVeic",
+    "department_code": "hidcd_ccustoveic"
+  },
+  "extra_fields": {
+    "txtcd_empresa": "1",
+    "txtnr_ordserv": "0",
+    "hid_readOnly_dh_entrada": "0",
+    "hid_readOnly_qt_km_ent": "0",
+    "hid_readOnly_qt_hr_ent": "1",
+    "hid_readOnly_dh_saida": "0",
+    "hid_readOnly_qt_km_sai": "0",
+    "hid_readOnly_qt_hr_sai": "1",
+    "hidbl_trava_os": "1"
+  },
+  "checkbox_map": {
+    "investment": "chkbl_invest",
+    "accident": "chkbl_acident",
+    "roadside_assistance": "chkbl_socorro",
+    "return_service": "chkbl_retorno",
+    "scheduled": "chkbl_corre"
+  },
+  "related_screens": {
+    "free_complaint": {
+      "screen_path": "Telas/TL11802.asp",
+      "form_index": 0,
+      "open_query": {
+        "cd_empresa": "1",
+        "nr_ordserv": "{order_number}"
+      },
+      "submit_query": {},
+      "submit_path": "Telas/TL11802.asp",
+      "field_map": {
+        "order_number": "txtnr_ordserv",
+        "defect_description": "edtobserv"
+      },
+      "extra_fields": {
+        "hidstatusreg": "1"
+      }
+    }
+  },
+  "unused_extra_fields": {}
+}

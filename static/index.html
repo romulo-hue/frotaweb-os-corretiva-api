@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FrotaWeb - OS Corretiva</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar">
+        <div>
+          <h1>Lançamento de O.S. corretiva</h1>
+          <p>TL11800 - Realização de Manutenção Corretiva. Login feito pela API usando o .env local.</p>
+        </div>
+        <div class="api-status" id="api-status">Verificando API...</div>
+      </section>
+
+      <section class="layout">
+        <form id="order-form" class="panel form-panel">
+          <div class="panel-heading">
+            <h2>Campos mapeados</h2>
+            <span class="required-note">Obrigatórios marcados com *</span>
+          </div>
+
+          <div class="field-grid" id="field-grid"></div>
+
+          <fieldset class="checks">
+            <legend>Marcadores opcionais</legend>
+            <label><input type="checkbox" name="investment"> Investimento</label>
+            <label><input type="checkbox" name="accident"> Acidente</label>
+            <label><input type="checkbox" name="roadside_assistance"> Socorro</label>
+            <label><input type="checkbox" name="return_service"> Retorno</label>
+            <label><input type="checkbox" name="scheduled"> Programada</label>
+          </fieldset>
+
+          <div class="actions">
+            <label class="toggle">
+              <input type="checkbox" id="dry-run" checked>
+              Simular antes de gravar
+            </label>
+            <button type="button" id="fill-example">Carregar exemplo 1830</button>
+            <button type="submit" class="primary">Enviar para API</button>
+          </div>
+        </form>
+
+        <aside class="panel side-panel">
+          <div class="panel-heading">
+            <h2>JSON gerado</h2>
+            <span id="mode-label">simulação</span>
+          </div>
+          <pre id="json-preview">{}</pre>
+
+          <div class="panel-heading result-heading">
+            <h2>Resposta da API</h2>
+          </div>
+          <pre id="result-preview">Aguardando envio.</pre>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
