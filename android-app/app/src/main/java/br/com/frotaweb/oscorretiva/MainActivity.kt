@@ -229,7 +229,7 @@ class MainActivity : Activity() {
                     append(" - ")
                     append(order.status)
                 }
-                card.addView(button(label).apply {
+                card.addView(statusButton(label, order.status).apply {
                     setOnClickListener { showUnsentOrderDetail(order.id) }
                 })
             }
@@ -266,6 +266,9 @@ class MainActivity : Activity() {
         if (order.status != "SYNCED") {
             card.addView(button(if (type == "SERVICE") "Reenviar este servico" else "Reenviar esta O.S.").apply {
                 setOnClickListener { sendLocalRecord(order.id, JSONObject(order.payload)) }
+            })
+            card.addView(dangerButton("Excluir lancamento pendente").apply {
+                setOnClickListener { confirmDeleteRecord(order) }
             })
         }
         if (type == "SERVICE") {
@@ -740,7 +743,7 @@ class MainActivity : Activity() {
         services.forEach { service ->
             val payload = JSONObject(service.payload)
             val label = "${statusText(service.status)} - Servico ${payload.optString("service_code", "-")}\nTempo: ${payload.optString("spent_time", "000:00")}"
-            root.addView(button(label).apply {
+            root.addView(statusButton(label, service.status).apply {
                 setOnClickListener { showUnsentOrderDetail(service.id) }
             })
         }
@@ -906,13 +909,20 @@ class MainActivity : Activity() {
             }
         }
 
-    private fun button(text: String) = Button(this).apply {
+    private fun button(text: String) = coloredButton(text, Color.BLACK)
+
+    private fun statusButton(text: String, status: String) =
+        coloredButton(text, if (status == "SYNCED") Color.rgb(22, 101, 52) else Color.BLACK)
+
+    private fun dangerButton(text: String) = coloredButton(text, Color.rgb(185, 28, 28))
+
+    private fun coloredButton(text: String, backgroundColor: Int) = Button(this).apply {
         this.text = text
         textSize = 16f
         setTextColor(Color.WHITE)
         setPadding(0, 14, 0, 14)
         background = GradientDrawable().apply {
-            color = ColorStateList.valueOf(Color.BLACK)
+            color = ColorStateList.valueOf(backgroundColor)
             cornerRadius = 22f
         }
 
@@ -926,6 +936,18 @@ class MainActivity : Activity() {
 
     private fun showMessage(title: String, message: String) {
         AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show()
+    }
+
+    private fun confirmDeleteRecord(order: LocalOrder) {
+        AlertDialog.Builder(this)
+            .setTitle("Excluir lancamento")
+            .setMessage("Este lancamento local sera removido da fila e nao sera enviado ao FrotaWeb.")
+            .setPositiveButton("Excluir") { _, _ ->
+                store.delete(order.id)
+                showUnsentOrdersScreen()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun showLoading(message: String) {
@@ -1127,6 +1149,9 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
     fun markSynced(id: Long, orderNumber: String) = update(id, "SYNCED", null, orderNumber)
     fun markFailed(id: Long, error: String) = update(id, "FAILED", error, null)
     fun markPending(id: Long, error: String) = update(id, "PENDING", error, null)
+    fun delete(id: Long) {
+        writableDatabase.delete("orders", "id=?", arrayOf(id.toString()))
+    }
 
     private fun update(id: Long, status: String, error: String?, orderNumber: String?) {
         writableDatabase.update("orders", ContentValues().apply {
