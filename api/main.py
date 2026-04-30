@@ -35,7 +35,7 @@ class CorrectiveOrderRequest(BaseModel):
 
     credentials: FrotaWebCredentials | None = Field(None, alias="credenciais")
     vehicle_code: str = Field(..., alias="codigo_veiculo", examples=["0973"])
-    defect_description: str = Field(..., alias="descricao_defeito", examples=["Falha mecanica informada pela operacao."])
+    defect_description: str = Field("", alias="descricao_defeito", examples=["Falha mecanica informada pela operacao."])
     order_number: str | None = Field(None, alias="numero_os")
     plate: str | None = Field(None, alias="placa")
     component_code: str | None = Field(None, alias="codigo_componente")
@@ -202,6 +202,7 @@ def build_dry_run_response(
 
 def with_tl11800_defaults(data: dict[str, Any]) -> dict[str, Any]:
     defaults = {
+        "defect_description": "",
         "entry_hourmeter": "0.00",
         "exit_hourmeter": "0.00",
         "expected_hours": "0.00",

@@ -7,6 +7,9 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.graphics.Typeface
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.content.res.ColorStateList
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
@@ -26,10 +29,13 @@ import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var store: OrderStore
     private val prefs by lazy { getSharedPreferences("frotaweb-login", MODE_PRIVATE) }
+    private val defaultApiUrl = "https://frotaweb-os-corretiva-api.onrender.com"
     private var currentPassword: String = ""
 
     private lateinit var apiUrl: EditText
@@ -50,20 +56,24 @@ class MainActivity : Activity() {
 
     private fun showLoginScreen() {
         val root = page()
-        root.addView(title("Login FrotaWeb"))
-        root.addView(note("Informe as credenciais do mecanico. A senha fica somente na memoria enquanto o app esta aberto."))
+        root.addView(hero("FrotaWeb OS", "Manutencao corretiva"))
+        val card = formCard()
+        card.addView(title("Login"))
 
-        apiUrl = input("URL da API", prefs.getString("apiUrl", "https://SEU-SERVICO.onrender.com") ?: "")
+        apiUrl = input("URL da API", prefs.getString("apiUrl", defaultApiUrl) ?: defaultApiUrl)
         empresa = input("Empresa *", prefs.getString("empresa", "1") ?: "1")
         filial = input("Filial *", prefs.getString("filial", "1") ?: "1")
         usuario = input("Usuario *", prefs.getString("usuario", "") ?: "")
         senha = input("Senha *", "", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
 
-        listOf(apiUrl, empresa, filial, usuario, senha).forEach(root::addView)
+        addInputView(card, "Empresa *", empresa)
+        addInputView(card, "Filial *", filial)
+        addInputView(card, "Usuario *", usuario)
+        addInputView(card, "Senha *", senha)
 
         val enter = button("Continuar")
         enter.setOnClickListener {
-            if (required(apiUrl, empresa, filial, usuario, senha)) {
+            if (required(empresa, filial, usuario, senha)) {
                 currentPassword = senha.text.toString()
                 val normalizedApiUrl = normalizeApiBaseUrl(apiUrl.text.toString())
                 apiUrl.setText(normalizedApiUrl)
@@ -76,69 +86,67 @@ class MainActivity : Activity() {
                 showOrderScreen()
             }
         }
-        root.addView(enter)
+        card.addView(enter)
 
         val sync = button("Sincronizar pendentes")
         sync.setOnClickListener {
-            if (required(apiUrl, empresa, filial, usuario, senha)) {
+            if (required(empresa, filial, usuario, senha)) {
                 currentPassword = senha.text.toString()
                 syncPending()
             }
         }
-        root.addView(sync)
-        root.addView(note("Pendentes locais: ${store.countPending()}"))
+        card.addView(sync)
+        card.addView(note("Pendentes locais: ${store.countPending()}"))
+        root.addView(card)
         setContentView(scroll(root))
     }
 
     private fun showOrderScreen() {
+        orderInputs.clear()
+        orderFormats.clear()
+        checks.clear()
+
         val root = page()
-        root.addView(title("Nova O.S. corretiva"))
-        root.addView(note("Campos com * sao obrigatorios. O app salva offline se estiver sem internet."))
+        root.addView(hero("Nova O.S.", "Corretiva"))
+        val card = formCard()
+        card.addView(title("Dados da O.S."))
+        card.addView(note("Campos com * sao obrigatorios. O app salva offline se estiver sem internet."))
 
-        addOrderInput(root, "vehicle_code", "Veiculo *", "Ex.: 1682", FieldFormat.INTEGER)
-        addOrderInput(root, "plate", "Placa", "Ex.: RKH1F96")
-        addOrderInput(root, "defect_description", "Reclamacao livre", "Descreva a falha")
-        addOrderInput(root, "opening_datetime", "Entrada - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
-        addOrderInput(root, "entry_hourmeter", "Entrada - Horimetro *", "0.00", FieldFormat.DECIMAL)
-        addOrderInput(root, "odometer", "Entrada - Km *", "103.345", FieldFormat.KM)
-        addOrderInput(root, "exit_datetime", "Saida - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
-        addOrderInput(root, "exit_hourmeter", "Saida - Horimetro *", "0.00", FieldFormat.DECIMAL)
-        addOrderInput(root, "exit_odometer", "Saida - Km *", "103.345", FieldFormat.KM)
-        addOrderInput(root, "start_datetime", "Data prevista para inicio *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
-        addOrderInput(root, "expected_release_datetime", "Data prevista de liberacao *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
-        addOrderInput(root, "expected_hours", "Horas previstas", "0.00", FieldFormat.DECIMAL)
-        addOrderInput(root, "actual_hours", "Horas realizadas", "0.00", FieldFormat.DECIMAL)
-        addOrderInput(root, "branch_code", "Filial da OS", "Ex.: 3", FieldFormat.INTEGER)
-        addOrderInput(root, "department_code", "Departamento", "Ex.: 420112", FieldFormat.INTEGER)
-        addOrderInput(root, "occurrence_number", "Ocorrencia", "0", FieldFormat.INTEGER)
-        addOrderInput(root, "driver_code", "Motorista", "0", FieldFormat.INTEGER)
-        addOrderInput(root, "surcharge_value", "Valor acrescimo", "0", FieldFormat.DECIMAL)
-        addOrderInput(root, "return_order_number", "O.S retorno", "0", FieldFormat.INTEGER)
-        addOrderInput(root, "observations", "Observacao (max 50)", "")
+        addOrderInput(card, "vehicle_code", "Veiculo *", "Ex.: 1682", FieldFormat.INTEGER)
+        addOrderInput(card, "plate", "Placa", "Ex.: RKH1F96")
+        addOrderInput(card, "defect_description", "Reclamacao livre", "Descreva a falha")
+        addOrderInput(card, "opening_datetime", "Entrada - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
+        addOrderInput(card, "entry_hourmeter", "Entrada - Horimetro", "0.00", FieldFormat.DECIMAL)
+        addOrderInput(card, "odometer", "Entrada - Km *", "103.345", FieldFormat.KM)
+        addOrderInput(card, "exit_datetime", "Saida - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
+        addOrderInput(card, "exit_hourmeter", "Saida - Horimetro", "0.00", FieldFormat.DECIMAL)
+        addOrderInput(card, "branch_code", "Filial da O.S. *", "Ex.: 3", FieldFormat.INTEGER)
+        addOrderInput(card, "department_code", "Departamento *", "Ex.: 420112", FieldFormat.INTEGER)
+        addOrderInput(card, "observations", "Observacao (max 50)", "")
 
-        root.addView(subtitle("Marcadores opcionais"))
-        addCheck(root, "investment", "Investimento")
-        addCheck(root, "accident", "Acidente")
-        addCheck(root, "roadside_assistance", "Socorro")
-        addCheck(root, "return_service", "Retorno")
-        addCheck(root, "scheduled", "Programada")
+        card.addView(subtitle("Marcadores opcionais"))
+        addCheck(card, "investment", "Investimento")
+        addCheck(card, "accident", "Acidente")
+        addCheck(card, "roadside_assistance", "Socorro")
+        addCheck(card, "return_service", "Retorno")
+        addCheck(card, "scheduled", "Programada")
 
         val save = button("Salvar e enviar")
         save.setOnClickListener { saveAndSend() }
-        root.addView(save)
+        card.addView(save)
 
         val back = button("Voltar ao login")
         back.setOnClickListener { showLoginScreen() }
-        root.addView(back)
-        root.addView(note("Pendentes locais: ${store.countPending()}"))
+        card.addView(back)
+        card.addView(note("Pendentes locais: ${store.countPending()}"))
+        root.addView(card)
         setContentView(scroll(root))
     }
 
     private fun saveAndSend() {
         val requiredNames = listOf(
-            "vehicle_code", "opening_datetime", "entry_hourmeter",
-            "odometer", "exit_datetime", "exit_hourmeter", "exit_odometer",
-            "start_datetime", "expected_release_datetime"
+            "vehicle_code", "opening_datetime", "odometer",
+            "exit_datetime", "branch_code", "department_code"
         )
         val missing = requiredNames.filter { orderInputs[it]?.text.toString().trim().isEmpty() }
         if (missing.isNotEmpty()) {
@@ -150,6 +158,7 @@ class MainActivity : Activity() {
             showMessage("Formato invalido", "Corrija os campos: ${invalid.joinToString(", ")}.")
             return
         }
+        if (!validateExitDate()) return
 
         val payload = buildOrderPayload()
         val id = store.insert(payload.toString())
@@ -210,6 +219,15 @@ class MainActivity : Activity() {
             val value = payloadValue(name, edit.text.toString().trim(), orderFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
         }
+        val opening = json.optString("opening_datetime", "")
+        val exit = json.optString("exit_datetime", "")
+        val odometer = json.optString("odometer", "")
+        json.put("entry_hourmeter", json.optString("entry_hourmeter", "0").ifBlank { "0" })
+        json.put("exit_hourmeter", json.optString("exit_hourmeter", "0").ifBlank { "0" })
+        if (odometer.isNotBlank()) json.put("exit_odometer", odometer)
+        if (opening.isNotBlank()) json.put("start_datetime", opening)
+        if (exit.isNotBlank()) json.put("expected_release_datetime", exit)
+        json.put("expected_hours", "0.00")
         checks.forEach { (name, check) ->
             if (check.isChecked) json.put(name, true)
         }
@@ -261,7 +279,7 @@ class MainActivity : Activity() {
         applyFormat(edit, format)
         orderInputs[name] = edit
         orderFormats[name] = format
-        root.addView(edit)
+        addInputView(root, label, edit)
     }
 
     private fun inputTypeFor(format: FieldFormat): Int = when (format) {
@@ -329,6 +347,31 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun validateExitDate(): Boolean {
+        val openingText = orderInputs["opening_datetime"]?.text?.toString()?.trim().orEmpty()
+        val exitText = orderInputs["exit_datetime"]?.text?.toString()?.trim().orEmpty()
+        val opening = parseDateTime(openingText)
+        val exit = parseDateTime(exitText)
+        if (opening == null || exit == null) return true
+        if (exit.after(opening)) {
+            orderInputs["exit_datetime"]?.error = "Saida nao pode ser maior que a entrada"
+            showMessage(
+                "Data de saida invalida",
+                "A Saida - Data/Hora nao pode ser maior que a Entrada - Data/Hora."
+            )
+            return false
+        }
+        return true
+    }
+
+    private fun parseDateTime(value: String) = try {
+        SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("pt", "BR")).apply {
+            isLenient = false
+        }.parse(value)
+    } catch (_: Exception) {
+        null
+    }
+
     private fun payloadValue(name: String, value: String, format: FieldFormat): String = when (format) {
         FieldFormat.KM -> value.digitsOnly()
         FieldFormat.DECIMAL -> value.replace(',', '.')
@@ -338,7 +381,13 @@ class MainActivity : Activity() {
     private fun String.digitsOnly(): String = filter { it.isDigit() }
 
     private fun addCheck(root: LinearLayout, name: String, label: String) {
-        val check = CheckBox(this).apply { text = label; textSize = 16f }
+        val check = CheckBox(this).apply {
+            text = label
+            textSize = 16f
+            setTextColor(Color.rgb(24, 24, 27))
+            buttonTintList = ColorStateList.valueOf(Color.BLACK)
+            setPadding(8, 6, 8, 6)
+        }
         checks[name] = check
         root.addView(check)
     }
@@ -358,43 +407,121 @@ class MainActivity : Activity() {
 
     private fun page() = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(28, 28, 28, 28)
+        setPadding(22, 72, 22, 22)
+        setBackgroundColor(Color.rgb(238, 240, 244))
     }
 
-    private fun scroll(child: View) = ScrollView(this).apply { addView(child) }
+    private fun scroll(child: View) = ScrollView(this).apply {
+        setBackgroundColor(Color.rgb(238, 240, 244))
+        addView(child)
+    }
+
+    private fun hero(title: String, subtitle: String) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(30, 34, 30, 34)
+        background = GradientDrawable().apply {
+            color = ColorStateList.valueOf(Color.BLACK)
+            cornerRadii = floatArrayOf(34f, 34f, 34f, 34f, 0f, 0f, 0f, 0f)
+        }
+        addView(TextView(this@MainActivity).apply {
+            text = title
+            textSize = 24f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        addView(TextView(this@MainActivity).apply {
+            text = subtitle
+            textSize = 14f
+            setTextColor(Color.rgb(210, 210, 210))
+            setPadding(0, 8, 0, 0)
+        })
+    }
+
+    private fun formCard() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(26, 30, 26, 28)
+        background = GradientDrawable().apply {
+            color = ColorStateList.valueOf(Color.WHITE)
+            cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, 34f, 34f, 34f, 34f)
+        }
+        elevation = 8f
+    }
 
     private fun title(text: String) = TextView(this).apply {
         this.text = text
         textSize = 24f
+        setTextColor(Color.rgb(24, 24, 27))
         setTypeface(typeface, Typeface.BOLD)
+        setPadding(0, 0, 0, 20)
     }
 
     private fun subtitle(text: String) = TextView(this).apply {
         this.text = text
         textSize = 18f
+        setTextColor(Color.rgb(24, 24, 27))
         setTypeface(typeface, Typeface.BOLD)
-        setPadding(0, 18, 0, 8)
+        setPadding(0, 24, 0, 10)
     }
 
     private fun note(text: String) = TextView(this).apply {
         this.text = text
         textSize = 14f
-        setPadding(0, 8, 0, 16)
+        setTextColor(Color.rgb(113, 113, 122))
+        setPadding(0, 4, 0, 18)
+    }
+
+    private fun addInputView(root: LinearLayout, label: String, edit: EditText) {
+        root.addView(TextView(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(Color.rgb(24, 24, 27))
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(4, 8, 4, 2)
+        })
+        root.addView(edit)
     }
 
     private fun input(label: String, value: String, type: Int = InputType.TYPE_CLASS_TEXT, hint: String = "") =
         EditText(this).apply {
-            this.hint = if (hint.isBlank()) label else "$label - $hint"
+            this.hint = hint.ifBlank { label }
             setText(value)
             inputType = type
-            textSize = 16f
+            textSize = 15f
             setSingleLine(!label.contains("Reclamacao"))
+
+            setTextColor(Color.rgb(24, 24, 27))
+            setHintTextColor(Color.rgb(140, 140, 148))
+            setPadding(22, 16, 22, 16)
+            background = GradientDrawable().apply {
+                color = ColorStateList.valueOf(Color.rgb(250, 250, 250))
+                cornerRadius = 18f
+                setStroke(1, Color.rgb(240, 240, 240))
+            }
+
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 8, 0, 12)
+            }
         }
 
     private fun button(text: String) = Button(this).apply {
         this.text = text
         textSize = 16f
-        setPadding(0, 10, 0, 10)
+        setTextColor(Color.WHITE)
+        setPadding(0, 14, 0, 14)
+        background = GradientDrawable().apply {
+            color = ColorStateList.valueOf(Color.BLACK)
+            cornerRadius = 22f
+        }
+
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            setMargins(0, 10, 0, 10)
+        }
     }
 
     private fun showMessage(title: String, message: String) {
