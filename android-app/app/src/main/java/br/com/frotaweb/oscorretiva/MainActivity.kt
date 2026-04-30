@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private lateinit var empresa: EditText
     private lateinit var filial: EditText
     private lateinit var usuario: EditText
+    private lateinit var recurso: EditText
     private lateinit var senha: EditText
 
     private val orderInputs = linkedMapOf<String, EditText>()
@@ -65,16 +66,18 @@ class MainActivity : Activity() {
         empresa = input("Empresa *", prefs.getString("empresa", "1") ?: "1")
         filial = input("Filial *", prefs.getString("filial", "1") ?: "1")
         usuario = input("Usuario *", prefs.getString("usuario", "") ?: "")
+        recurso = input("Recurso humano *", prefs.getString("recurso", prefs.getString("usuario", "") ?: "") ?: "")
         senha = input("Senha *", "", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
 
         addInputView(card, "Empresa *", empresa)
         addInputView(card, "Filial *", filial)
         addInputView(card, "Usuario *", usuario)
+        addInputView(card, "Recurso humano *", recurso)
         addInputView(card, "Senha *", senha)
 
         val enter = button("Continuar")
         enter.setOnClickListener {
-            if (required(empresa, filial, usuario, senha)) {
+            if (required(empresa, filial, usuario, recurso, senha)) {
                 currentPassword = senha.text.toString()
                 val normalizedApiUrl = normalizeApiBaseUrl(apiUrl.text.toString())
                 apiUrl.setText(normalizedApiUrl)
@@ -83,6 +86,7 @@ class MainActivity : Activity() {
                     .putString("empresa", empresa.text.toString().trim())
                     .putString("filial", filial.text.toString().trim())
                     .putString("usuario", usuario.text.toString().trim())
+                    .putString("recurso", recurso.text.toString().trim())
                     .apply()
                 showOrderScreen()
             }
@@ -91,13 +95,17 @@ class MainActivity : Activity() {
 
         val sync = button("Sincronizar pendentes")
         sync.setOnClickListener {
-            if (required(empresa, filial, usuario, senha)) {
+            if (required(empresa, filial, usuario, recurso, senha)) {
                 currentPassword = senha.text.toString()
                 syncPending()
             }
         }
         card.addView(sync)
-        card.addView(note("Pendentes locais: ${store.countPending()}"))
+
+        val pending = button("Consultar O.S. nao enviadas")
+        pending.setOnClickListener { showUnsentOrdersScreen() }
+        card.addView(pending)
+        card.addView(note("O.S. nao enviadas: ${store.countUnsent()}"))
         root.addView(card)
         setContentView(scroll(root))
     }
@@ -139,7 +147,72 @@ class MainActivity : Activity() {
         val back = button("Voltar ao login")
         back.setOnClickListener { showLoginScreen() }
         card.addView(back)
-        card.addView(note("Pendentes locais: ${store.countPending()}"))
+        val pending = button("Consultar O.S. nao enviadas")
+        pending.setOnClickListener { showUnsentOrdersScreen() }
+        card.addView(pending)
+        card.addView(note("O.S. nao enviadas: ${store.countUnsent()}"))
+        root.addView(card)
+        setContentView(scroll(root))
+    }
+
+    private fun showUnsentOrdersScreen() {
+        val root = page()
+        root.addView(hero("O.S. pendentes", "Nao enviadas"))
+        val card = formCard()
+        card.addView(title("Consulta"))
+        val orders = store.unsent()
+        if (orders.isEmpty()) {
+            card.addView(note("Nao ha O.S. pendente ou com falha de envio."))
+        } else {
+            orders.forEach { order ->
+                val payload = JSONObject(order.payload)
+                val label = buildString {
+                    append("#${order.id} - Veiculo ")
+                    append(payload.optString("vehicle_code", "-"))
+                    val plate = payload.optString("plate", "")
+                    if (plate.isNotBlank()) append(" / $plate")
+                    append("\n")
+                    append(payload.optString("opening_datetime", "-"))
+                    append(" - ")
+                    append(order.status)
+                }
+                card.addView(button(label).apply {
+                    setOnClickListener { showUnsentOrderDetail(order.id) }
+                })
+            }
+        }
+        card.addView(button("Voltar ao login").apply { setOnClickListener { showLoginScreen() } })
+        root.addView(card)
+        setContentView(scroll(root))
+    }
+
+    private fun showUnsentOrderDetail(orderId: Long) {
+        val order = store.find(orderId)
+        if (order == null) {
+            showMessage("O.S. nao encontrada", "Essa O.S. nao esta mais na fila local.")
+            showUnsentOrdersScreen()
+            return
+        }
+
+        val payload = JSONObject(order.payload)
+        val root = page()
+        root.addView(hero("O.S. #${order.id}", order.status))
+        val card = formCard()
+        card.addView(title("Preenchimento"))
+        order.error?.takeIf { it.isNotBlank() }?.let {
+            card.addView(note("Ultimo retorno: $it"))
+        }
+        orderDetailLabels.forEach { (key, label) ->
+            if (payload.has(key)) card.addView(detailLine(label, payload.optString(key)))
+        }
+        val checked = checksDetail(payload)
+        if (checked.isNotBlank()) card.addView(detailLine("Marcadores", checked))
+
+        card.addView(button("Reenviar esta O.S.").apply {
+            setOnClickListener { sendOrder(order.id, JSONObject(order.payload)) }
+        })
+        card.addView(button("Voltar a lista").apply { setOnClickListener { showUnsentOrdersScreen() } })
+        card.addView(button("Voltar ao login").apply { setOnClickListener { showLoginScreen() } })
         root.addView(card)
         setContentView(scroll(root))
     }
@@ -172,11 +245,12 @@ class MainActivity : Activity() {
     }
 
     private fun syncPending() {
+        if (!hasCredentials()) return
         if (!isOnline()) {
             showMessage("Sem internet", "Nao foi possivel sincronizar agora.")
             return
         }
-        val pending = store.pending()
+        val pending = store.unsent()
         if (pending.isEmpty()) {
             showMessage("Sincronizacao", "Nao ha O.S. pendente.")
             return
@@ -185,6 +259,7 @@ class MainActivity : Activity() {
     }
 
     private fun sendOrder(id: Long, payload: JSONObject) {
+        if (!hasCredentials()) return
         Thread {
             try {
                 val endpoint = "${normalizeApiBaseUrl(apiUrl.text.toString())}/os-corretiva?simulacao=false"
@@ -241,9 +316,26 @@ class MainActivity : Activity() {
             put("empresa", empresa.text.toString().trim())
             put("filial", filial.text.toString().trim())
             put("usuario", usuario.text.toString().trim())
+            put("recurso", recurso.text.toString().trim())
             put("senha", currentPassword)
         })
         return json
+    }
+
+    private fun hasCredentials(): Boolean {
+        val hasFields = ::empresa.isInitialized && ::filial.isInitialized &&
+            ::usuario.isInitialized && ::recurso.isInitialized
+        if (!hasFields || usuario.text.toString().trim().isBlank() ||
+            recurso.text.toString().trim().isBlank() || currentPassword.isBlank()
+        ) {
+            showMessage(
+                "Login necessario",
+                "Informe usuario, recurso humano e senha no login antes de enviar ou sincronizar."
+            )
+            showLoginScreen()
+            return false
+        }
+        return true
     }
 
     private fun normalizeApiBaseUrl(rawUrl: String): String {
@@ -491,6 +583,13 @@ class MainActivity : Activity() {
         setPadding(0, 4, 0, 18)
     }
 
+    private fun detailLine(label: String, value: String) = TextView(this).apply {
+        text = "$label\n$value"
+        textSize = 15f
+        setTextColor(Color.rgb(24, 24, 27))
+        setPadding(4, 8, 4, 12)
+    }
+
     private fun addInputView(root: LinearLayout, label: String, edit: EditText) {
         root.addView(TextView(this).apply {
             text = label
@@ -548,9 +647,45 @@ class MainActivity : Activity() {
     private fun showMessage(title: String, message: String) {
         AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show()
     }
+
+    private val orderDetailLabels = listOf(
+        "vehicle_code" to "Veiculo",
+        "plate" to "Placa",
+        "defect_description" to "Reclamacao livre",
+        "opening_datetime" to "Entrada - Data/Hora",
+        "entry_hourmeter" to "Entrada - Horimetro",
+        "odometer" to "Entrada - Km",
+        "exit_datetime" to "Saida - Data/Hora",
+        "exit_hourmeter" to "Saida - Horimetro",
+        "exit_odometer" to "Saida - Km",
+        "start_datetime" to "Data prevista para inicio",
+        "expected_release_datetime" to "Data prevista de liberacao",
+        "expected_hours" to "Horas previstas",
+        "branch_code" to "Filial da O.S.",
+        "department_code" to "Departamento",
+        "observations" to "Observacao"
+    )
+
+    private fun checksDetail(payload: JSONObject): String {
+        val labels = listOf(
+            "investment" to "Investimento",
+            "accident" to "Acidente",
+            "roadside_assistance" to "Socorro",
+            "return_service" to "Retorno",
+            "scheduled" to "Programada"
+        )
+        return labels.filter { (key, _) -> payload.optBoolean(key, false) }
+            .joinToString(", ") { (_, label) -> label }
+    }
 }
 
-data class LocalOrder(val id: Long, val payload: String)
+data class LocalOrder(
+    val id: Long,
+    val payload: String,
+    val status: String = "PENDING",
+    val error: String? = null,
+    val createdAt: Long = 0L
+)
 
 enum class FieldFormat {
     TEXT,
@@ -594,17 +729,47 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
         put("created_at", System.currentTimeMillis())
     })
 
-    fun pending(): List<LocalOrder> {
-        val cursor = readableDatabase.rawQuery("SELECT id, payload FROM orders WHERE status='PENDING' ORDER BY id", null)
+    fun unsent(): List<LocalOrder> {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT id, payload, status, error, created_at FROM orders WHERE status IN ('PENDING', 'FAILED') ORDER BY id",
+            null
+        )
         val items = mutableListOf<LocalOrder>()
         cursor.use {
-            while (it.moveToNext()) items.add(LocalOrder(it.getLong(0), it.getString(1)))
+            while (it.moveToNext()) {
+                items.add(
+                    LocalOrder(
+                        id = it.getLong(0),
+                        payload = it.getString(1),
+                        status = it.getString(2),
+                        error = it.getString(3),
+                        createdAt = it.getLong(4)
+                    )
+                )
+            }
         }
         return items
     }
 
-    fun countPending(): Int {
-        val cursor = readableDatabase.rawQuery("SELECT COUNT(*) FROM orders WHERE status='PENDING'", null)
+    fun find(id: Long): LocalOrder? {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT id, payload, status, error, created_at FROM orders WHERE id=?",
+            arrayOf(id.toString())
+        )
+        cursor.use {
+            if (!it.moveToFirst()) return null
+            return LocalOrder(
+                id = it.getLong(0),
+                payload = it.getString(1),
+                status = it.getString(2),
+                error = it.getString(3),
+                createdAt = it.getLong(4)
+            )
+        }
+    }
+
+    fun countUnsent(): Int {
+        val cursor = readableDatabase.rawQuery("SELECT COUNT(*) FROM orders WHERE status IN ('PENDING', 'FAILED')", null)
         cursor.use { return if (it.moveToFirst()) it.getInt(0) else 0 }
     }
 

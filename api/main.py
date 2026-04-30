@@ -28,6 +28,7 @@ class FrotaWebCredentials(BaseModel):
     usuario: str = Field(..., examples=["232"])
     senha: str = Field(..., repr=False)
     filial: str = Field("0", examples=["1"])
+    recurso: str = Field("", alias="recurso_humano", examples=["232"])
 
 
 class CorrectiveOrderRequest(BaseModel):
@@ -257,6 +258,7 @@ def make_logged_client(credentials: FrotaWebCredentials | None = None) -> FrotaW
         usuario=credentials.usuario,
         senha=credentials.senha,
         filial=credentials.filial,
+        recurso=credentials.recurso,
     )
     if not login.logged_in:
         raise HTTPException(status_code=401, detail=login.message)
