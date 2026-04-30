@@ -38,6 +38,11 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("frotaweb-login", MODE_PRIVATE) }
     private val defaultApiUrl = "https://frotaweb-os-corretiva-api.onrender.com"
     private var currentPassword: String = ""
+    private var currentApiUrl: String = defaultApiUrl
+    private var currentEmpresa: String = "1"
+    private var currentFilial: String = "1"
+    private var currentUsuario: String = ""
+    private var currentRecurso: String = ""
     private var activeOrderNumber: String = ""
     private var activeOrderPayload: JSONObject? = null
 
@@ -57,6 +62,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = OrderStore(this)
+        loadSession()
         showLoginScreen()
     }
 
@@ -66,11 +72,11 @@ class MainActivity : Activity() {
         val card = formCard()
         card.addView(title("Login"))
 
-        apiUrl = input("URL da API", prefs.getString("apiUrl", defaultApiUrl) ?: defaultApiUrl)
-        empresa = input("Empresa *", prefs.getString("empresa", "1") ?: "1")
-        filial = input("Filial *", prefs.getString("filial", "1") ?: "1")
-        usuario = input("Usuario *", prefs.getString("usuario", "") ?: "")
-        recurso = input("Recurso humano *", prefs.getString("recurso", prefs.getString("usuario", "") ?: "") ?: "")
+        apiUrl = input("URL da API", currentApiUrl)
+        empresa = input("Empresa *", currentEmpresa)
+        filial = input("Filial *", currentFilial)
+        usuario = input("Usuario *", currentUsuario)
+        recurso = input("Recurso humano *", currentRecurso.ifBlank { currentUsuario })
         senha = input("Senha *", "", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
 
         addInputView(card, "Empresa *", empresa)
@@ -82,16 +88,7 @@ class MainActivity : Activity() {
         val enter = button("Continuar")
         enter.setOnClickListener {
             if (required(empresa, filial, usuario, recurso, senha)) {
-                currentPassword = senha.text.toString()
-                val normalizedApiUrl = normalizeApiBaseUrl(apiUrl.text.toString())
-                apiUrl.setText(normalizedApiUrl)
-                prefs.edit()
-                    .putString("apiUrl", normalizedApiUrl)
-                    .putString("empresa", empresa.text.toString().trim())
-                    .putString("filial", filial.text.toString().trim())
-                    .putString("usuario", usuario.text.toString().trim())
-                    .putString("recurso", recurso.text.toString().trim())
-                    .apply()
+                saveLoginSession()
                 showOrderScreen()
             }
         }
@@ -100,7 +97,7 @@ class MainActivity : Activity() {
         val sync = button("Sincronizar pendentes")
         sync.setOnClickListener {
             if (required(empresa, filial, usuario, recurso, senha)) {
-                currentPassword = senha.text.toString()
+                saveLoginSession()
                 syncPending()
             }
         }
@@ -188,9 +185,8 @@ class MainActivity : Activity() {
         card.addView(statusBanner("O.S. vinculada: $orderNumber"))
         card.addView(note("Campos com * sao obrigatorios. O servico sera vinculado a uma O.S. ja criada."))
 
-        val orderPayload = activeOrderPayload
-        addServiceInput(card, "vehicle_code", "Veiculo", "Ex.: 1719", FieldFormat.INTEGER, prefill?.optString("vehicle_code", orderPayload?.optString("vehicle_code", "") ?: ""))
-        addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, prefill?.optString("plate", orderPayload?.optString("plate", "") ?: ""))
+        addServiceInput(card, "vehicle_code", "Veiculo", "Ex.: 1719", FieldFormat.INTEGER, serviceVehicle(prefill))
+        addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, servicePlate(prefill))
         serviceInputs["vehicle_code"]?.isEnabled = false
         serviceInputs["plate"]?.isEnabled = false
         addServiceInput(card, "service_code", "Servico *", "Ex.: 0", FieldFormat.INTEGER, prefill?.optString("service_code", ""))
@@ -358,6 +354,7 @@ class MainActivity : Activity() {
                             activeOrderPayload = JSONObject(payload.toString()).apply {
                                 put("order_number", orderNumber)
                             }
+                            saveActiveOrder()
                         }
                         showMessage(if (isService) "Servico enviado" else "O.S. enviada", message)
                         if (isService) showServiceScreen() else showOrderScreen(activeOrderPayload, activeOrderNumber)
@@ -401,15 +398,13 @@ class MainActivity : Activity() {
         val json = JSONObject()
         json.put("_local_type", "SERVICE")
         json.put("order_number", activeOrderNumber)
-        json.put("resource_code", usuario.text.toString().trim())
+        json.put("resource_code", loginUsuario())
         serviceInputs.forEach { (name, edit) ->
             val value = payloadValue(name, edit.text.toString().trim(), serviceFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
         }
-        activeOrderPayload?.let { order ->
-            if (json.optString("vehicle_code").isBlank()) json.put("vehicle_code", order.optString("vehicle_code", ""))
-            if (json.optString("plate").isBlank()) json.put("plate", order.optString("plate", ""))
-        }
+        if (json.optString("vehicle_code").isBlank()) json.put("vehicle_code", serviceVehicle())
+        if (json.optString("plate").isBlank()) json.put("plate", servicePlate())
         json.put("spent_time", json.optString("spent_time", "000:00").ifBlank { "000:00" })
         json.put("hourly_value", "0")
         return json
@@ -419,21 +414,18 @@ class MainActivity : Activity() {
         val json = JSONObject(orderPayload.toString())
         json.remove("_local_type")
         json.put("credentials", JSONObject().apply {
-            put("empresa", empresa.text.toString().trim())
-            put("filial", filial.text.toString().trim())
-            put("usuario", usuario.text.toString().trim())
-            put("recurso", recurso.text.toString().trim())
+            put("empresa", loginEmpresa())
+            put("filial", loginFilial())
+            put("usuario", loginUsuario())
+            put("recurso", loginRecurso().ifBlank { loginUsuario() })
             put("senha", currentPassword)
         })
         return json
     }
 
     private fun hasCredentials(): Boolean {
-        val hasFields = ::empresa.isInitialized && ::filial.isInitialized &&
-            ::usuario.isInitialized && ::recurso.isInitialized
-        if (!hasFields || usuario.text.toString().trim().isBlank() ||
-            recurso.text.toString().trim().isBlank() || currentPassword.isBlank()
-        ) {
+        refreshLoginCacheFromViews()
+        if (loginUsuario().isBlank() || loginRecurso().ifBlank { loginUsuario() }.isBlank() || currentPassword.isBlank()) {
             showMessage(
                 "Login necessario",
                 "Informe usuario, recurso humano e senha no login antes de enviar ou sincronizar."
@@ -443,6 +435,76 @@ class MainActivity : Activity() {
         }
         return true
     }
+
+    private fun loadSession() {
+        currentApiUrl = prefs.getString("apiUrl", defaultApiUrl) ?: defaultApiUrl
+        currentEmpresa = prefs.getString("empresa", "1") ?: "1"
+        currentFilial = prefs.getString("filial", "1") ?: "1"
+        currentUsuario = prefs.getString("usuario", "") ?: ""
+        currentRecurso = prefs.getString("recurso", currentUsuario) ?: currentUsuario
+        activeOrderNumber = prefs.getString("activeOrderNumber", "") ?: ""
+        activeOrderPayload = prefs.getString("activeOrderPayload", "")?.takeIf { it.isNotBlank() }?.let {
+            runCatching { JSONObject(it) }.getOrNull()
+        }
+    }
+
+    private fun saveLoginSession() {
+        currentPassword = senha.text.toString()
+        currentApiUrl = normalizeApiBaseUrl(apiUrl.text.toString())
+        currentEmpresa = empresa.text.toString().trim()
+        currentFilial = filial.text.toString().trim()
+        currentUsuario = usuario.text.toString().trim()
+        currentRecurso = recurso.text.toString().trim().ifBlank { currentUsuario }
+        apiUrl.setText(currentApiUrl)
+        prefs.edit()
+            .putString("apiUrl", currentApiUrl)
+            .putString("empresa", currentEmpresa)
+            .putString("filial", currentFilial)
+            .putString("usuario", currentUsuario)
+            .putString("recurso", currentRecurso)
+            .apply()
+    }
+
+    private fun saveActiveOrder() {
+        prefs.edit()
+            .putString("activeOrderNumber", activeOrderNumber)
+            .putString("activeOrderPayload", activeOrderPayload?.toString().orEmpty())
+            .apply()
+    }
+
+    private fun refreshLoginCacheFromViews() {
+        if (::apiUrl.isInitialized) currentApiUrl = normalizeApiBaseUrl(apiUrl.text.toString())
+        if (::empresa.isInitialized) currentEmpresa = empresa.text.toString().trim()
+        if (::filial.isInitialized) currentFilial = filial.text.toString().trim()
+        if (::usuario.isInitialized) currentUsuario = usuario.text.toString().trim()
+        if (::recurso.isInitialized) currentRecurso = recurso.text.toString().trim().ifBlank { currentUsuario }
+    }
+
+    private fun loginEmpresa() = currentEmpresa.ifBlank {
+        if (::empresa.isInitialized) empresa.text.toString().trim() else prefs.getString("empresa", "1").orEmpty()
+    }
+
+    private fun loginFilial() = currentFilial.ifBlank {
+        if (::filial.isInitialized) filial.text.toString().trim() else prefs.getString("filial", "1").orEmpty()
+    }
+
+    private fun loginUsuario() = currentUsuario.ifBlank {
+        if (::usuario.isInitialized) usuario.text.toString().trim() else prefs.getString("usuario", "").orEmpty()
+    }
+
+    private fun loginRecurso() = currentRecurso.ifBlank {
+        if (::recurso.isInitialized) recurso.text.toString().trim() else prefs.getString("recurso", loginUsuario()).orEmpty()
+    }
+
+    private fun serviceVehicle(prefill: JSONObject? = null): String =
+        prefill?.optString("vehicle_code", "")?.takeIf { it.isNotBlank() }
+            ?: activeOrderPayload?.optString("vehicle_code", "")?.takeIf { it.isNotBlank() }
+            ?: orderInputs["vehicle_code"]?.text?.toString()?.trim().orEmpty()
+
+    private fun servicePlate(prefill: JSONObject? = null): String =
+        prefill?.optString("plate", "")?.takeIf { it.isNotBlank() }
+            ?: activeOrderPayload?.optString("plate", "")?.takeIf { it.isNotBlank() }
+            ?: orderInputs["plate"]?.text?.toString()?.trim().orEmpty()
 
     private fun normalizeApiBaseUrl(rawUrl: String): String {
         var url = rawUrl.trim()
