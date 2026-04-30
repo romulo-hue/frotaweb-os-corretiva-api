@@ -38,6 +38,8 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("frotaweb-login", MODE_PRIVATE) }
     private val defaultApiUrl = "https://frotaweb-os-corretiva-api.onrender.com"
     private var currentPassword: String = ""
+    private var activeOrderNumber: String = ""
+    private var activeOrderPayload: JSONObject? = null
 
     private lateinit var apiUrl: EditText
     private lateinit var empresa: EditText
@@ -95,15 +97,6 @@ class MainActivity : Activity() {
         }
         card.addView(enter)
 
-        val service = button("Servicos realizados")
-        service.setOnClickListener {
-            if (required(empresa, filial, usuario, recurso, senha)) {
-                currentPassword = senha.text.toString()
-                showServiceScreen()
-            }
-        }
-        card.addView(service)
-
         val sync = button("Sincronizar pendentes")
         sync.setOnClickListener {
             if (required(empresa, filial, usuario, recurso, senha)) {
@@ -121,7 +114,7 @@ class MainActivity : Activity() {
         setContentView(scroll(root))
     }
 
-    private fun showOrderScreen() {
+    private fun showOrderScreen(prefill: JSONObject? = activeOrderPayload, orderNumber: String = activeOrderNumber) {
         orderInputs.clear()
         orderFormats.clear()
         checks.clear()
@@ -130,34 +123,41 @@ class MainActivity : Activity() {
         root.addView(hero("Nova O.S.", "Corretiva"))
         val card = formCard()
         card.addView(title("Dados da O.S."))
+        if (orderNumber.isNotBlank()) {
+            card.addView(statusBanner("O.S. gerada: $orderNumber"))
+        }
         card.addView(note("Campos com * sao obrigatorios. O app salva offline se estiver sem internet."))
 
-        addOrderInput(card, "vehicle_code", "Veiculo *", "Ex.: 1682", FieldFormat.INTEGER)
-        addOrderInput(card, "plate", "Placa", "Ex.: RKH1F96")
-        addOrderInput(card, "defect_description", "Reclamacao livre", "Descreva a falha")
-        addOrderInput(card, "opening_datetime", "Entrada - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
-        addOrderInput(card, "entry_hourmeter", "Entrada - Horimetro", "0.00", FieldFormat.DECIMAL)
-        addOrderInput(card, "odometer", "Entrada - Km *", "103.345", FieldFormat.KM)
-        addOrderInput(card, "exit_datetime", "Saida - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME)
-        addOrderInput(card, "exit_hourmeter", "Saida - Horimetro", "0.00", FieldFormat.DECIMAL)
-        addOrderInput(card, "branch_code", "Filial da O.S. *", "Ex.: 3", FieldFormat.INTEGER)
-        addOrderInput(card, "department_code", "Departamento *", "Ex.: 420112", FieldFormat.INTEGER)
-        addOrderInput(card, "observations", "Observacao (max 50)", "")
+        addOrderInput(card, "vehicle_code", "Veiculo *", "Ex.: 1682", FieldFormat.INTEGER, prefill?.optString("vehicle_code", ""))
+        addOrderInput(card, "plate", "Placa", "Ex.: RKH1F96", FieldFormat.TEXT, prefill?.optString("plate", ""))
+        addOrderInput(card, "defect_description", "Reclamacao livre", "Descreva a falha", FieldFormat.TEXT, prefill?.optString("defect_description", ""))
+        addOrderInput(card, "opening_datetime", "Entrada - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME, prefill?.optString("opening_datetime", ""))
+        addOrderInput(card, "entry_hourmeter", "Entrada - Horimetro", "0.00", FieldFormat.DECIMAL, prefill?.optString("entry_hourmeter", ""))
+        addOrderInput(card, "odometer", "Entrada - Km *", "103.345", FieldFormat.KM, prefill?.optString("odometer", ""))
+        addOrderInput(card, "exit_datetime", "Saida - Data/Hora *", "dd/MM/aaaa HH:mm:ss", FieldFormat.DATETIME, prefill?.optString("exit_datetime", ""))
+        addOrderInput(card, "exit_hourmeter", "Saida - Horimetro", "0.00", FieldFormat.DECIMAL, prefill?.optString("exit_hourmeter", ""))
+        addOrderInput(card, "branch_code", "Filial da O.S. *", "Ex.: 3", FieldFormat.INTEGER, prefill?.optString("branch_code", ""))
+        addOrderInput(card, "department_code", "Departamento *", "Ex.: 420112", FieldFormat.INTEGER, prefill?.optString("department_code", ""))
+        addOrderInput(card, "observations", "Observacao (max 50)", "", FieldFormat.TEXT, prefill?.optString("observations", ""))
 
         card.addView(subtitle("Marcadores opcionais"))
-        addCheck(card, "investment", "Investimento")
-        addCheck(card, "accident", "Acidente")
-        addCheck(card, "roadside_assistance", "Socorro")
-        addCheck(card, "return_service", "Retorno")
-        addCheck(card, "scheduled", "Programada")
+        addCheck(card, "investment", "Investimento", prefill?.optBoolean("investment", false) == true)
+        addCheck(card, "accident", "Acidente", prefill?.optBoolean("accident", false) == true)
+        addCheck(card, "roadside_assistance", "Socorro", prefill?.optBoolean("roadside_assistance", false) == true)
+        addCheck(card, "return_service", "Retorno", prefill?.optBoolean("return_service", false) == true)
+        addCheck(card, "scheduled", "Programada", prefill?.optBoolean("scheduled", false) == true)
 
         val save = button("Salvar e enviar")
         save.setOnClickListener { saveAndSend() }
         card.addView(save)
 
-        val service = button("Servicos realizados")
-        service.setOnClickListener { showServiceScreen() }
-        card.addView(service)
+        if (orderNumber.isNotBlank()) {
+            val service = button("Servicos realizados")
+            service.setOnClickListener { showServiceScreen() }
+            card.addView(service)
+        } else {
+            card.addView(note("Servicos realizados serao liberados apos gerar o numero da O.S."))
+        }
 
         val back = button("Voltar ao login")
         back.setOnClickListener { showLoginScreen() }
@@ -171,6 +171,13 @@ class MainActivity : Activity() {
     }
 
     private fun showServiceScreen(prefill: JSONObject? = null) {
+        val orderNumber = prefill?.optString("order_number", activeOrderNumber).orEmpty().ifBlank { activeOrderNumber }
+        if (orderNumber.isBlank()) {
+            showMessage("O.S. obrigatoria", "Salve a O.S. primeiro para gerar o numero e liberar servicos.")
+            showOrderScreen()
+            return
+        }
+        activeOrderNumber = orderNumber
         serviceInputs.clear()
         serviceFormats.clear()
 
@@ -178,13 +185,13 @@ class MainActivity : Activity() {
         root.addView(hero("Servicos", "Realizados"))
         val card = formCard()
         card.addView(title("Servico da O.S."))
+        card.addView(statusBanner("O.S. vinculada: $orderNumber"))
         card.addView(note("Campos com * sao obrigatorios. O servico sera vinculado a uma O.S. ja criada."))
 
-        addServiceInput(card, "order_number", "Ordem de Servico *", "Ex.: 64926", FieldFormat.INTEGER, prefill?.optString("order_number", ""))
-        addServiceInput(card, "vehicle_code", "Veiculo", "Ex.: 1719", FieldFormat.INTEGER, prefill?.optString("vehicle_code", ""))
-        addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, prefill?.optString("plate", ""))
+        val orderPayload = activeOrderPayload
+        addServiceInput(card, "vehicle_code", "Veiculo", "Ex.: 1719", FieldFormat.INTEGER, prefill?.optString("vehicle_code", orderPayload?.optString("vehicle_code", "") ?: ""))
+        addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, prefill?.optString("plate", orderPayload?.optString("plate", "") ?: ""))
         addServiceInput(card, "service_code", "Servico *", "Ex.: 0", FieldFormat.INTEGER, prefill?.optString("service_code", ""))
-        addServiceInput(card, "resource_code", "Recurso humano", "Ex.: ${recurso.text}", FieldFormat.INTEGER, prefill?.optString("resource_code", recurso.text.toString().trim()))
         addServiceInput(card, "spent_time", "Tempo gasto", "000:00", FieldFormat.TIME, prefill?.optString("spent_time", "000:00"))
 
         card.addView(button("Salvar servico").apply { setOnClickListener { saveAndSendService() } })
@@ -305,10 +312,15 @@ class MainActivity : Activity() {
     }
 
     private fun saveAndSendService() {
-        val requiredNames = listOf("order_number", "service_code")
+        if (activeOrderNumber.isBlank()) {
+            showMessage("O.S. obrigatoria", "Salve a O.S. primeiro para gerar o numero e liberar servicos.")
+            showOrderScreen()
+            return
+        }
+        val requiredNames = listOf("service_code")
         val missing = requiredNames.filter { serviceInputs[it]?.text.toString().trim().isEmpty() }
         if (missing.isNotEmpty()) {
-            showMessage("Campos obrigatorios", "Preencha Ordem de Servico e Servico.")
+            showMessage("Campos obrigatorios", "Preencha o campo Servico.")
             return
         }
         val payload = buildServicePayload()
@@ -337,9 +349,16 @@ class MainActivity : Activity() {
                 val message = body.optString("message", body.optString("detail", response.body))
                 runOnUiThread {
                     if (created) {
-                        store.markSynced(id, body.optString("order_number"))
+                        val orderNumber = body.optString("order_number")
+                        store.markSynced(id, orderNumber)
+                        if (!isService && orderNumber.isNotBlank()) {
+                            activeOrderNumber = orderNumber
+                            activeOrderPayload = JSONObject(payload.toString()).apply {
+                                put("order_number", orderNumber)
+                            }
+                        }
                         showMessage(if (isService) "Servico enviado" else "O.S. enviada", message)
-                        if (isService) showServiceScreen() else showOrderScreen()
+                        if (isService) showServiceScreen() else showOrderScreen(activeOrderPayload, activeOrderNumber)
                     } else {
                         store.markFailed(id, message)
                         showMessage("Erro do FrotaWeb", message)
@@ -379,6 +398,8 @@ class MainActivity : Activity() {
     private fun buildServicePayload(): JSONObject {
         val json = JSONObject()
         json.put("_local_type", "SERVICE")
+        json.put("order_number", activeOrderNumber)
+        json.put("resource_code", usuario.text.toString().trim())
         serviceInputs.forEach { (name, edit) ->
             val value = payloadValue(name, edit.text.toString().trim(), serviceFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
@@ -446,8 +467,15 @@ class MainActivity : Activity() {
         return ApiResponse(status, body)
     }
 
-    private fun addOrderInput(root: LinearLayout, name: String, label: String, hint: String, format: FieldFormat = FieldFormat.TEXT) {
-        val edit = input(label, "", inputTypeFor(format), hint)
+    private fun addOrderInput(
+        root: LinearLayout,
+        name: String,
+        label: String,
+        hint: String,
+        format: FieldFormat = FieldFormat.TEXT,
+        value: String? = ""
+    ) {
+        val edit = input(label, value.orEmpty(), inputTypeFor(format), hint)
         applyFormat(edit, format)
         orderInputs[name] = edit
         orderFormats[name] = format
@@ -599,13 +627,14 @@ class MainActivity : Activity() {
 
     private fun String.digitsOnly(): String = filter { it.isDigit() }
 
-    private fun addCheck(root: LinearLayout, name: String, label: String) {
+    private fun addCheck(root: LinearLayout, name: String, label: String, checked: Boolean = false) {
         val check = CheckBox(this).apply {
             text = label
             textSize = 16f
             setTextColor(Color.rgb(24, 24, 27))
             buttonTintList = ColorStateList.valueOf(Color.BLACK)
             setPadding(8, 6, 8, 6)
+            isChecked = checked
         }
         checks[name] = check
         root.addView(check)
@@ -687,6 +716,24 @@ class MainActivity : Activity() {
         textSize = 14f
         setTextColor(Color.rgb(113, 113, 122))
         setPadding(0, 4, 0, 18)
+    }
+
+    private fun statusBanner(text: String) = TextView(this).apply {
+        this.text = text
+        textSize = 16f
+        setTextColor(Color.WHITE)
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(18, 14, 18, 14)
+        background = GradientDrawable().apply {
+            color = ColorStateList.valueOf(Color.rgb(22, 101, 52))
+            cornerRadius = 18f
+        }
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            setMargins(0, 0, 0, 16)
+        }
     }
 
     private fun detailLine(label: String, value: String) = TextView(this).apply {
