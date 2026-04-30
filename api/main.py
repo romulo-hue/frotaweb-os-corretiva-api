@@ -203,6 +203,16 @@ def create_performed_service(
                 "txtcd_recurso": service.resource_code or "",
                 "txtqt_horas": service.spent_time,
                 "txtvl_hora": service.hourly_value,
+                "hidcd_veiculo": service.vehicle_code or "",
+                "hidplaca": service.plate or "",
+                "txtcd_priorid": "0",
+                "txtcd_fornec": "0",
+                "txtnr_nf": "0",
+                "txtvl_serv_pr": "0",
+                "txtvl_servico": "0",
+                "txtdd_garanti": "0",
+                "txtcd_motserv": "0",
+                "txtcd_cparada": "0",
             },
         }
 

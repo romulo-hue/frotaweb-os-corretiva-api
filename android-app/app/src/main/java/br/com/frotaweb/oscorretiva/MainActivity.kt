@@ -191,6 +191,8 @@ class MainActivity : Activity() {
         val orderPayload = activeOrderPayload
         addServiceInput(card, "vehicle_code", "Veiculo", "Ex.: 1719", FieldFormat.INTEGER, prefill?.optString("vehicle_code", orderPayload?.optString("vehicle_code", "") ?: ""))
         addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, prefill?.optString("plate", orderPayload?.optString("plate", "") ?: ""))
+        serviceInputs["vehicle_code"]?.isEnabled = false
+        serviceInputs["plate"]?.isEnabled = false
         addServiceInput(card, "service_code", "Servico *", "Ex.: 0", FieldFormat.INTEGER, prefill?.optString("service_code", ""))
         addServiceInput(card, "spent_time", "Tempo gasto", "000:00", FieldFormat.TIME, prefill?.optString("spent_time", "000:00"))
 
@@ -403,6 +405,10 @@ class MainActivity : Activity() {
         serviceInputs.forEach { (name, edit) ->
             val value = payloadValue(name, edit.text.toString().trim(), serviceFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
+        }
+        activeOrderPayload?.let { order ->
+            if (json.optString("vehicle_code").isBlank()) json.put("vehicle_code", order.optString("vehicle_code", ""))
+            if (json.optString("plate").isBlank()) json.put("plate", order.optString("plate", ""))
         }
         json.put("spent_time", json.optString("spent_time", "000:00").ifBlank { "000:00" })
         json.put("hourly_value", "0")

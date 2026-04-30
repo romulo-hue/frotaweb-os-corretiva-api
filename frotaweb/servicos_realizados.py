@@ -117,15 +117,31 @@ class PerformedServiceLauncher:
         return PerformedServiceResult(ok=ok, message=message, response=response, related_responses=responses)
 
     def _service_fields(self, service: PerformedService, company_code: str) -> dict[str, str]:
+        spent_time = normalize_time(service.spent_time)
+        hourly_value = normalize_number(service.hourly_value)
         fields = {
             "txtcd_empresa": company_code,
             "txtnr_ordserv": service.order_number,
             "txtcd_servico": service.service_code,
-            "txtqt_horas": service.spent_time or "000:00",
-            "txtvl_hora": service.hourly_value or "0",
+            "txtqt_horas": spent_time,
+            "txtvl_hora": hourly_value,
+            "hidvl_padrao": hourly_value,
+            "hidvl_serv_pr_aux": "0",
+            "txtcd_priorid": "0",
+            "txtcd_fornec": "0",
+            "txtnr_nf": "0",
+            "txtvl_serv_pr": "0",
+            "txtvl_servico": "0",
+            "txtdd_garanti": "0",
+            "txtcd_motserv": "0",
+            "txtcd_cparada": "0",
         }
+        if service.vehicle_code:
+            fields["hidcd_veiculo"] = service.vehicle_code
+        if service.plate:
+            fields["hidplaca"] = service.plate
         if service.resource_code is not None:
-            fields["txtcd_recurso"] = service.resource_code
+            fields["txtcd_recurso"] = normalize_number(service.resource_code)
         return fields
 
     def _select_form(self, html: str):
@@ -139,3 +155,15 @@ def optional_str(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def normalize_number(value: Any, default: str = "0") -> str:
+    text = str(value or "").strip()
+    if "," in text:
+        text = text.replace(".", "").replace(",", ".")
+    return text or default
+
+
+def normalize_time(value: Any) -> str:
+    text = str(value or "").strip()
+    return text if text else "000:00"
