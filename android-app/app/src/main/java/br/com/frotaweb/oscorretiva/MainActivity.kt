@@ -17,11 +17,13 @@ import android.text.Editable
 import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONObject
@@ -45,6 +47,8 @@ class MainActivity : Activity() {
     private var currentRecurso: String = ""
     private var activeOrderNumber: String = ""
     private var activeOrderPayload: JSONObject? = null
+    private var loadingDialog: AlertDialog? = null
+    private var pendingNetworkCalls = 0
 
     private lateinit var apiUrl: EditText
     private lateinit var empresa: EditText
@@ -106,7 +110,7 @@ class MainActivity : Activity() {
         val pending = button("Consultar O.S. nao enviadas")
         pending.setOnClickListener { showUnsentOrdersScreen() }
         card.addView(pending)
-        card.addView(note("O.S. nao enviadas: ${store.countUnsent()}"))
+        card.addView(note("Lancamentos pendentes/com erro: ${store.countUnsent()}"))
         root.addView(card)
         setContentView(scroll(root))
     }
@@ -162,7 +166,7 @@ class MainActivity : Activity() {
         val pending = button("Consultar O.S. nao enviadas")
         pending.setOnClickListener { showUnsentOrdersScreen() }
         card.addView(pending)
-        card.addView(note("O.S. nao enviadas: ${store.countUnsent()}"))
+        card.addView(note("Lancamentos pendentes/com erro: ${store.countUnsent()}"))
         root.addView(card)
         setContentView(scroll(root))
     }
@@ -192,6 +196,7 @@ class MainActivity : Activity() {
         card.addView(note("Recurso humano: ${loginRecurso().ifBlank { loginUsuario() }}"))
         addServiceInput(card, "service_code", "Servico *", "Ex.: 0", FieldFormat.INTEGER, prefill?.optString("service_code", ""))
         addServiceInput(card, "spent_time", "Tempo gasto", "000:00", FieldFormat.TIME, prefill?.optString("spent_time", "000:00"))
+        addServicesForOrder(card, orderNumber)
 
         card.addView(button("Salvar servico").apply { setOnClickListener { saveAndSendService() } })
         card.addView(button("Voltar a O.S.").apply { setOnClickListener { showOrderScreen() } })
@@ -202,20 +207,21 @@ class MainActivity : Activity() {
 
     private fun showUnsentOrdersScreen() {
         val root = page()
-        root.addView(hero("O.S. pendentes", "Nao enviadas"))
+        root.addView(hero("Lancamentos", "Locais"))
         val card = formCard()
-        card.addView(title("Consulta"))
-        val orders = store.unsent()
-        if (orders.isEmpty()) {
-            card.addView(note("Nao ha O.S. pendente ou com falha de envio."))
+        card.addView(title("Consulta local"))
+        card.addView(note("Pendentes e com erro podem ser reenviados. Sincronizados ficam como historico local."))
+        val records = store.all()
+        if (records.isEmpty()) {
+            card.addView(note("Nao ha lancamentos salvos neste aparelho."))
         } else {
-            orders.forEach { order ->
+            records.forEach { order ->
                 val payload = JSONObject(order.payload)
                 val label = buildString {
                     val type = payload.optString("_local_type", "ORDER")
-                    append("#${order.id} - ")
-                    append(if (type == "SERVICE") "Servico O.S. " else "O.S. Veiculo ")
-                    append(if (type == "SERVICE") payload.optString("order_number", "-") else payload.optString("vehicle_code", "-"))
+                    append("${statusText(order.status)} - #${order.id} - ")
+                    append(if (type == "SERVICE") "Servico O.S. " else "O.S. ")
+                    append(if (type == "SERVICE") payload.optString("order_number", "-") else order.orderNumber ?: "Veiculo ${payload.optString("vehicle_code", "-")}")
                     val plate = payload.optString("plate", "")
                     if (plate.isNotBlank()) append(" / $plate")
                     append("\n")
@@ -252,16 +258,25 @@ class MainActivity : Activity() {
         }
         val labels = if (type == "SERVICE") serviceDetailLabels else orderDetailLabels
         labels.forEach { (key, label) ->
-            if (payload.has(key)) card.addView(detailLine(label, payload.optString(key)))
+            if (payload.has(key)) card.addView(detailLine(label, detailValue(key, payload)))
         }
         val checked = checksDetail(payload)
         if (checked.isNotBlank()) card.addView(detailLine("Marcadores", checked))
 
-        card.addView(button(if (type == "SERVICE") "Reenviar este servico" else "Reenviar esta O.S.").apply {
-            setOnClickListener { sendLocalRecord(order.id, JSONObject(order.payload)) }
-        })
+        if (order.status != "SYNCED") {
+            card.addView(button(if (type == "SERVICE") "Reenviar este servico" else "Reenviar esta O.S.").apply {
+                setOnClickListener { sendLocalRecord(order.id, JSONObject(order.payload)) }
+            })
+        }
         if (type == "SERVICE") {
             card.addView(button("Editar servico").apply { setOnClickListener { showServiceScreen(payload) } })
+        }
+        if (type == "ORDER") {
+            val orderNumber = order.orderNumber ?: payload.optString("order_number", "")
+            if (orderNumber.isNotBlank()) {
+                card.addView(detailLine("Ordem de Servico", orderNumber))
+                addServicesForOrder(card, orderNumber)
+            }
         }
         card.addView(button("Voltar a lista").apply { setOnClickListener { showUnsentOrdersScreen() } })
         card.addView(button("Voltar ao login").apply { setOnClickListener { showLoginScreen() } })
@@ -334,11 +349,12 @@ class MainActivity : Activity() {
 
     private fun sendLocalRecord(id: Long, payload: JSONObject) {
         if (!hasCredentials()) return
+        val isService = payload.optString("_local_type", "ORDER") == "SERVICE"
+        showLoading(if (isService) "Enviando servico..." else "Enviando O.S....")
         Thread {
             try {
-                val isService = payload.optString("_local_type", "ORDER") == "SERVICE"
                 val path = if (isService) "/os-corretiva/servicos?simulacao=false" else "/os-corretiva?simulacao=false"
-                val endpoint = "${normalizeApiBaseUrl(apiUrl.text.toString())}$path"
+                val endpoint = "${currentApiUrl.ifBlank { normalizeApiBaseUrl(apiUrl.text.toString()) }}$path"
                 val response = postJson(
                     endpoint,
                     withCredentials(payload)
@@ -347,6 +363,7 @@ class MainActivity : Activity() {
                 val created = body.optBoolean("created", false)
                 val message = body.optString("message", body.optString("detail", response.body))
                 runOnUiThread {
+                    hideLoading()
                     if (created) {
                         val orderNumber = body.optString("order_number")
                         store.markSynced(id, orderNumber)
@@ -366,6 +383,7 @@ class MainActivity : Activity() {
                 }
             } catch (ex: Exception) {
                 runOnUiThread {
+                    hideLoading()
                     store.markPending(id, ex.message ?: "Falha de rede")
                     showMessage("Salvo offline", "Nao foi possivel enviar agora. O registro ficou pendente.\n${ex.message}")
                 }
@@ -544,7 +562,7 @@ class MainActivity : Activity() {
         format: FieldFormat = FieldFormat.TEXT,
         value: String? = ""
     ) {
-        val edit = input(label, value.orEmpty(), inputTypeFor(format), hint)
+        val edit = input(label, formatInitialValue(value.orEmpty(), format), inputTypeFor(format), hint)
         applyFormat(edit, format)
         orderInputs[name] = edit
         orderFormats[name] = format
@@ -559,7 +577,7 @@ class MainActivity : Activity() {
         format: FieldFormat = FieldFormat.TEXT,
         value: String? = ""
     ) {
-        val edit = input(label, value.orEmpty(), inputTypeFor(format), hint)
+        val edit = input(label, formatInitialValue(value.orEmpty(), format), inputTypeFor(format), hint)
         applyFormat(edit, format)
         serviceInputs[name] = edit
         serviceFormats[name] = format
@@ -625,6 +643,16 @@ class MainActivity : Activity() {
         if (value.isBlank()) return ""
         val padded = value.padStart(5, '0')
         return "${padded.take(3)}:${padded.takeLast(2)}"
+    }
+
+    private fun formatInitialValue(value: String, format: FieldFormat): String {
+        if (value.isBlank()) return ""
+        return when (format) {
+            FieldFormat.KM -> formatThousandsDigits(value.digitsOnly())
+            FieldFormat.DATETIME -> formatDateTimeDigits(value.digitsOnly())
+            FieldFormat.TIME -> formatTimeDigits(value.digitsOnly())
+            else -> value
+        }
     }
 
     private fun invalidFormats(): List<String> {
@@ -695,6 +723,36 @@ class MainActivity : Activity() {
     }
 
     private fun String.digitsOnly(): String = filter { it.isDigit() }
+
+    private fun statusText(status: String): String = when (status) {
+        "SYNCED" -> "Sincronizado"
+        "FAILED" -> "Com erro"
+        else -> "Pendente"
+    }
+
+    private fun addServicesForOrder(root: LinearLayout, orderNumber: String) {
+        val services = store.servicesForOrder(orderNumber)
+        root.addView(subtitle("Servicos ja lancados"))
+        if (services.isEmpty()) {
+            root.addView(note("Nenhum servico salvo localmente para esta O.S."))
+            return
+        }
+        services.forEach { service ->
+            val payload = JSONObject(service.payload)
+            val label = "${statusText(service.status)} - Servico ${payload.optString("service_code", "-")}\nTempo: ${payload.optString("spent_time", "000:00")}"
+            root.addView(button(label).apply {
+                setOnClickListener { showUnsentOrderDetail(service.id) }
+            })
+        }
+    }
+
+    private fun detailValue(key: String, payload: JSONObject): String {
+        val value = payload.optString(key)
+        return when (key) {
+            "odometer", "exit_odometer" -> formatThousandsDigits(value.digitsOnly())
+            else -> value
+        }
+    }
 
     private fun addCheck(root: LinearLayout, name: String, label: String, checked: Boolean = false) {
         val check = CheckBox(this).apply {
@@ -870,6 +928,40 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show()
     }
 
+    private fun showLoading(message: String) {
+        pendingNetworkCalls += 1
+        if (loadingDialog?.isShowing == true) return
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(36, 30, 36, 30)
+            addView(ProgressBar(this@MainActivity).apply {
+                isIndeterminate = true
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = message
+                textSize = 16f
+                setTextColor(Color.rgb(24, 24, 27))
+                setPadding(24, 0, 0, 0)
+            })
+        }
+        loadingDialog = AlertDialog.Builder(this)
+            .setView(content)
+            .setCancelable(false)
+            .create().apply {
+                setCanceledOnTouchOutside(false)
+                show()
+            }
+    }
+
+    private fun hideLoading() {
+        pendingNetworkCalls = (pendingNetworkCalls - 1).coerceAtLeast(0)
+        if (pendingNetworkCalls == 0) {
+            loadingDialog?.dismiss()
+            loadingDialog = null
+        }
+    }
+
     private val orderDetailLabels = listOf(
         "_local_type" to "Tipo",
         "vehicle_code" to "Veiculo",
@@ -918,7 +1010,8 @@ data class LocalOrder(
     val payload: String,
     val status: String = "PENDING",
     val error: String? = null,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val orderNumber: String? = null
 )
 
 enum class FieldFormat {
@@ -966,9 +1059,30 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
 
     fun unsent(): List<LocalOrder> {
         val cursor = readableDatabase.rawQuery(
-            "SELECT id, payload, status, error, created_at FROM orders WHERE status IN ('PENDING', 'FAILED') ORDER BY id",
+            "SELECT id, payload, status, error, created_at, order_number FROM orders WHERE status IN ('PENDING', 'FAILED') ORDER BY id",
             null
         )
+        return readOrders(cursor)
+    }
+
+    fun all(): List<LocalOrder> {
+        val cursor = readableDatabase.rawQuery(
+            "SELECT id, payload, status, error, created_at, order_number FROM orders ORDER BY id DESC",
+            null
+        )
+        return readOrders(cursor)
+    }
+
+    fun servicesForOrder(orderNumber: String): List<LocalOrder> =
+        all().filter { order ->
+            runCatching {
+                val payload = JSONObject(order.payload)
+                payload.optString("_local_type", "ORDER") == "SERVICE" &&
+                    payload.optString("order_number") == orderNumber
+            }.getOrDefault(false)
+        }
+
+    private fun readOrders(cursor: android.database.Cursor): List<LocalOrder> {
         val items = mutableListOf<LocalOrder>()
         cursor.use {
             while (it.moveToNext()) {
@@ -978,7 +1092,8 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
                         payload = it.getString(1),
                         status = it.getString(2),
                         error = it.getString(3),
-                        createdAt = it.getLong(4)
+                        createdAt = it.getLong(4),
+                        orderNumber = it.getString(5)
                     )
                 )
             }
@@ -988,7 +1103,7 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
 
     fun find(id: Long): LocalOrder? {
         val cursor = readableDatabase.rawQuery(
-            "SELECT id, payload, status, error, created_at FROM orders WHERE id=?",
+            "SELECT id, payload, status, error, created_at, order_number FROM orders WHERE id=?",
             arrayOf(id.toString())
         )
         cursor.use {
@@ -998,7 +1113,8 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
                 payload = it.getString(1),
                 status = it.getString(2),
                 error = it.getString(3),
-                createdAt = it.getLong(4)
+                createdAt = it.getLong(4),
+                orderNumber = it.getString(5)
             )
         }
     }
