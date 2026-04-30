@@ -48,6 +48,8 @@ class MainActivity : Activity() {
 
     private val orderInputs = linkedMapOf<String, EditText>()
     private val orderFormats = linkedMapOf<String, FieldFormat>()
+    private val serviceInputs = linkedMapOf<String, EditText>()
+    private val serviceFormats = linkedMapOf<String, FieldFormat>()
     private val checks = linkedMapOf<String, CheckBox>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +94,15 @@ class MainActivity : Activity() {
             }
         }
         card.addView(enter)
+
+        val service = button("Servicos realizados")
+        service.setOnClickListener {
+            if (required(empresa, filial, usuario, recurso, senha)) {
+                currentPassword = senha.text.toString()
+                showServiceScreen()
+            }
+        }
+        card.addView(service)
 
         val sync = button("Sincronizar pendentes")
         sync.setOnClickListener {
@@ -144,6 +155,10 @@ class MainActivity : Activity() {
         save.setOnClickListener { saveAndSend() }
         card.addView(save)
 
+        val service = button("Servicos realizados")
+        service.setOnClickListener { showServiceScreen() }
+        card.addView(service)
+
         val back = button("Voltar ao login")
         back.setOnClickListener { showLoginScreen() }
         card.addView(back)
@@ -151,6 +166,30 @@ class MainActivity : Activity() {
         pending.setOnClickListener { showUnsentOrdersScreen() }
         card.addView(pending)
         card.addView(note("O.S. nao enviadas: ${store.countUnsent()}"))
+        root.addView(card)
+        setContentView(scroll(root))
+    }
+
+    private fun showServiceScreen(prefill: JSONObject? = null) {
+        serviceInputs.clear()
+        serviceFormats.clear()
+
+        val root = page()
+        root.addView(hero("Servicos", "Realizados"))
+        val card = formCard()
+        card.addView(title("Servico da O.S."))
+        card.addView(note("Campos com * sao obrigatorios. O servico sera vinculado a uma O.S. ja criada."))
+
+        addServiceInput(card, "order_number", "Ordem de Servico *", "Ex.: 64926", FieldFormat.INTEGER, prefill?.optString("order_number", ""))
+        addServiceInput(card, "vehicle_code", "Veiculo", "Ex.: 1719", FieldFormat.INTEGER, prefill?.optString("vehicle_code", ""))
+        addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, prefill?.optString("plate", ""))
+        addServiceInput(card, "service_code", "Servico *", "Ex.: 0", FieldFormat.INTEGER, prefill?.optString("service_code", ""))
+        addServiceInput(card, "resource_code", "Recurso humano", "Ex.: ${recurso.text}", FieldFormat.INTEGER, prefill?.optString("resource_code", recurso.text.toString().trim()))
+        addServiceInput(card, "spent_time", "Tempo gasto", "000:00", FieldFormat.TIME, prefill?.optString("spent_time", "000:00"))
+
+        card.addView(button("Salvar servico").apply { setOnClickListener { saveAndSendService() } })
+        card.addView(button("Voltar a O.S.").apply { setOnClickListener { showOrderScreen() } })
+        card.addView(button("Voltar ao login").apply { setOnClickListener { showLoginScreen() } })
         root.addView(card)
         setContentView(scroll(root))
     }
@@ -167,12 +206,14 @@ class MainActivity : Activity() {
             orders.forEach { order ->
                 val payload = JSONObject(order.payload)
                 val label = buildString {
-                    append("#${order.id} - Veiculo ")
-                    append(payload.optString("vehicle_code", "-"))
+                    val type = payload.optString("_local_type", "ORDER")
+                    append("#${order.id} - ")
+                    append(if (type == "SERVICE") "Servico O.S. " else "O.S. Veiculo ")
+                    append(if (type == "SERVICE") payload.optString("order_number", "-") else payload.optString("vehicle_code", "-"))
                     val plate = payload.optString("plate", "")
                     if (plate.isNotBlank()) append(" / $plate")
                     append("\n")
-                    append(payload.optString("opening_datetime", "-"))
+                    append(payload.optString("opening_datetime", payload.optString("service_code", "-")))
                     append(" - ")
                     append(order.status)
                 }
@@ -196,21 +237,26 @@ class MainActivity : Activity() {
 
         val payload = JSONObject(order.payload)
         val root = page()
-        root.addView(hero("O.S. #${order.id}", order.status))
+        val type = payload.optString("_local_type", "ORDER")
+        root.addView(hero(if (type == "SERVICE") "Servico #${order.id}" else "O.S. #${order.id}", order.status))
         val card = formCard()
         card.addView(title("Preenchimento"))
         order.error?.takeIf { it.isNotBlank() }?.let {
             card.addView(note("Ultimo retorno: $it"))
         }
-        orderDetailLabels.forEach { (key, label) ->
+        val labels = if (type == "SERVICE") serviceDetailLabels else orderDetailLabels
+        labels.forEach { (key, label) ->
             if (payload.has(key)) card.addView(detailLine(label, payload.optString(key)))
         }
         val checked = checksDetail(payload)
         if (checked.isNotBlank()) card.addView(detailLine("Marcadores", checked))
 
-        card.addView(button("Reenviar esta O.S.").apply {
-            setOnClickListener { sendOrder(order.id, JSONObject(order.payload)) }
+        card.addView(button(if (type == "SERVICE") "Reenviar este servico" else "Reenviar esta O.S.").apply {
+            setOnClickListener { sendLocalRecord(order.id, JSONObject(order.payload)) }
         })
+        if (type == "SERVICE") {
+            card.addView(button("Editar servico").apply { setOnClickListener { showServiceScreen(payload) } })
+        }
         card.addView(button("Voltar a lista").apply { setOnClickListener { showUnsentOrdersScreen() } })
         card.addView(button("Voltar ao login").apply { setOnClickListener { showLoginScreen() } })
         root.addView(card)
@@ -241,7 +287,7 @@ class MainActivity : Activity() {
             showOrderScreen()
             return
         }
-        sendOrder(id, payload)
+        sendLocalRecord(id, payload)
     }
 
     private fun syncPending() {
@@ -255,14 +301,33 @@ class MainActivity : Activity() {
             showMessage("Sincronizacao", "Nao ha O.S. pendente.")
             return
         }
-        pending.forEach { sendOrder(it.id, JSONObject(it.payload)) }
+        pending.forEach { sendLocalRecord(it.id, JSONObject(it.payload)) }
     }
 
-    private fun sendOrder(id: Long, payload: JSONObject) {
+    private fun saveAndSendService() {
+        val requiredNames = listOf("order_number", "service_code")
+        val missing = requiredNames.filter { serviceInputs[it]?.text.toString().trim().isEmpty() }
+        if (missing.isNotEmpty()) {
+            showMessage("Campos obrigatorios", "Preencha Ordem de Servico e Servico.")
+            return
+        }
+        val payload = buildServicePayload()
+        val id = store.insert(payload.toString())
+        if (!isOnline()) {
+            showMessage("Salvo offline", "Sem internet. O servico ficou pendente para sincronizacao.")
+            showServiceScreen()
+            return
+        }
+        sendLocalRecord(id, payload)
+    }
+
+    private fun sendLocalRecord(id: Long, payload: JSONObject) {
         if (!hasCredentials()) return
         Thread {
             try {
-                val endpoint = "${normalizeApiBaseUrl(apiUrl.text.toString())}/os-corretiva?simulacao=false"
+                val isService = payload.optString("_local_type", "ORDER") == "SERVICE"
+                val path = if (isService) "/os-corretiva/servicos?simulacao=false" else "/os-corretiva?simulacao=false"
+                val endpoint = "${normalizeApiBaseUrl(apiUrl.text.toString())}$path"
                 val response = postJson(
                     endpoint,
                     withCredentials(payload)
@@ -273,8 +338,8 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     if (created) {
                         store.markSynced(id, body.optString("order_number"))
-                        showMessage("O.S. enviada", "Numero: ${body.optString("order_number")}\n$message")
-                        showOrderScreen()
+                        showMessage(if (isService) "Servico enviado" else "O.S. enviada", message)
+                        if (isService) showServiceScreen() else showOrderScreen()
                     } else {
                         store.markFailed(id, message)
                         showMessage("Erro do FrotaWeb", message)
@@ -283,7 +348,7 @@ class MainActivity : Activity() {
             } catch (ex: Exception) {
                 runOnUiThread {
                     store.markPending(id, ex.message ?: "Falha de rede")
-                    showMessage("Salvo offline", "Nao foi possivel enviar agora. A O.S. ficou pendente.\n${ex.message}")
+                    showMessage("Salvo offline", "Nao foi possivel enviar agora. O registro ficou pendente.\n${ex.message}")
                 }
             }
         }.start()
@@ -291,6 +356,7 @@ class MainActivity : Activity() {
 
     private fun buildOrderPayload(): JSONObject {
         val json = JSONObject()
+        json.put("_local_type", "ORDER")
         orderInputs.forEach { (name, edit) ->
             val value = payloadValue(name, edit.text.toString().trim(), orderFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
@@ -310,8 +376,21 @@ class MainActivity : Activity() {
         return json
     }
 
+    private fun buildServicePayload(): JSONObject {
+        val json = JSONObject()
+        json.put("_local_type", "SERVICE")
+        serviceInputs.forEach { (name, edit) ->
+            val value = payloadValue(name, edit.text.toString().trim(), serviceFormats[name] ?: FieldFormat.TEXT)
+            if (value.isNotEmpty()) json.put(name, value)
+        }
+        json.put("spent_time", json.optString("spent_time", "000:00").ifBlank { "000:00" })
+        json.put("hourly_value", "0")
+        return json
+    }
+
     private fun withCredentials(orderPayload: JSONObject): JSONObject {
         val json = JSONObject(orderPayload.toString())
+        json.remove("_local_type")
         json.put("credentials", JSONObject().apply {
             put("empresa", empresa.text.toString().trim())
             put("filial", filial.text.toString().trim())
@@ -375,8 +454,23 @@ class MainActivity : Activity() {
         addInputView(root, label, edit)
     }
 
+    private fun addServiceInput(
+        root: LinearLayout,
+        name: String,
+        label: String,
+        hint: String,
+        format: FieldFormat = FieldFormat.TEXT,
+        value: String? = ""
+    ) {
+        val edit = input(label, value.orEmpty(), inputTypeFor(format), hint)
+        applyFormat(edit, format)
+        serviceInputs[name] = edit
+        serviceFormats[name] = format
+        addInputView(root, label, edit)
+    }
+
     private fun inputTypeFor(format: FieldFormat): Int = when (format) {
-        FieldFormat.DATETIME, FieldFormat.INTEGER, FieldFormat.KM -> InputType.TYPE_CLASS_NUMBER
+        FieldFormat.DATETIME, FieldFormat.INTEGER, FieldFormat.KM, FieldFormat.TIME -> InputType.TYPE_CLASS_NUMBER
         FieldFormat.DECIMAL -> InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         FieldFormat.TEXT -> InputType.TYPE_CLASS_TEXT
     }
@@ -388,6 +482,10 @@ class MainActivity : Activity() {
                 edit.addTextChangedListener(maskWatcher(edit, ::formatDateTimeDigits))
             }
             FieldFormat.KM -> edit.addTextChangedListener(maskWatcher(edit, ::formatThousandsDigits))
+            FieldFormat.TIME -> {
+                edit.filters = arrayOf(InputFilter.LengthFilter(6))
+                edit.addTextChangedListener(maskWatcher(edit, ::formatTimeDigits))
+            }
             else -> Unit
         }
     }
@@ -425,6 +523,13 @@ class MainActivity : Activity() {
         return digits.reversed().chunked(3).joinToString(".").reversed()
     }
 
+    private fun formatTimeDigits(digits: String): String {
+        val value = digits.take(5)
+        if (value.isBlank()) return ""
+        val padded = value.padStart(5, '0')
+        return "${padded.take(3)}:${padded.takeLast(2)}"
+    }
+
     private fun invalidFormats(): List<String> {
         return orderInputs.mapNotNull { (name, edit) ->
             val value = edit.text.toString().trim()
@@ -434,6 +539,7 @@ class MainActivity : Activity() {
                 FieldFormat.DECIMAL -> value.replace(',', '.').matches(Regex("""\d+(\.\d{1,2})?"""))
                 FieldFormat.INTEGER -> value.digitsOnly() == value
                 FieldFormat.KM -> value.digitsOnly().isNotBlank()
+                FieldFormat.TIME -> value.matches(Regex("""\d{3}:\d{2}"""))
                 FieldFormat.TEXT -> true
             }
             if (valid) null else edit.hint.toString().substringBefore(" - ")
@@ -649,6 +755,7 @@ class MainActivity : Activity() {
     }
 
     private val orderDetailLabels = listOf(
+        "_local_type" to "Tipo",
         "vehicle_code" to "Veiculo",
         "plate" to "Placa",
         "defect_description" to "Reclamacao livre",
@@ -664,6 +771,17 @@ class MainActivity : Activity() {
         "branch_code" to "Filial da O.S.",
         "department_code" to "Departamento",
         "observations" to "Observacao"
+    )
+
+    private val serviceDetailLabels = listOf(
+        "_local_type" to "Tipo",
+        "order_number" to "Ordem de Servico",
+        "vehicle_code" to "Veiculo",
+        "plate" to "Placa",
+        "service_code" to "Servico",
+        "resource_code" to "Recurso humano",
+        "spent_time" to "Tempo gasto",
+        "hourly_value" to "Valor hora"
     )
 
     private fun checksDetail(payload: JSONObject): String {
@@ -692,7 +810,8 @@ enum class FieldFormat {
     DATETIME,
     DECIMAL,
     INTEGER,
-    KM
+    KM,
+    TIME
 }
 
 data class ApiResponse(val status: Int, val body: String) {

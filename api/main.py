@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 
 from frotaweb import CorrectiveOrder, CorrectiveOrderService, FrotaWebClient, FrotaWebError
+from frotaweb import PerformedService, PerformedServiceLauncher
 from frotaweb.os_correctiva import order_value, order_value_with_number, render_mapping
 from scripts._env import load_dotenv
 
@@ -67,6 +68,20 @@ class CorrectiveOrderRequest(BaseModel):
     roadside_assistance: bool | None = Field(None, alias="socorro")
     return_service: bool | None = Field(None, alias="servico_retorno")
     scheduled: bool | None = Field(None, alias="programada")
+    raw_fields: dict[str, str] = Field(default_factory=dict, alias="campos_brutos")
+
+
+class PerformedServiceRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    credentials: FrotaWebCredentials | None = Field(None, alias="credenciais")
+    order_number: str = Field(..., alias="numero_os", examples=["64926"])
+    vehicle_code: str | None = Field(None, alias="codigo_veiculo")
+    plate: str | None = Field(None, alias="placa")
+    service_code: str = Field(..., alias="codigo_servico", examples=["0"])
+    resource_code: str | None = Field(None, alias="codigo_recurso_humano")
+    spent_time: str = Field("000:00", alias="tempo_gasto")
+    hourly_value: str = Field("0", alias="valor_hora")
     raw_fields: dict[str, str] = Field(default_factory=dict, alias="campos_brutos")
 
 
@@ -152,6 +167,67 @@ def create_corrective_order(
         "order_number": result.order_number,
         "response_url": result.response.url,
         "debug_response_file": str((debug_dir / f"os_corretiva_{stamp}.html").resolve()),
+        "related": {
+            name: {
+                "status": response.status,
+                "url": response.url,
+            }
+            for name, response in result.related_responses.items()
+        },
+    }
+
+
+@app.post("/os-corretiva/servicos")
+def create_performed_service(
+    payload: PerformedServiceRequest,
+    dry_run: bool = Query(
+        True,
+        alias="simulacao",
+        description="Quando true, nao grava no FrotaWeb; apenas retorna os campos que seriam enviados.",
+    ),
+) -> dict[str, Any]:
+    payload_data = payload.model_dump(exclude_none=True, by_alias=False, exclude={"credentials"})
+    service = PerformedService.from_dict(payload_data)
+    company_code = payload.credentials.empresa if payload.credentials else os.environ.get("FROTAWEB_EMPRESA", "1")
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "would_submit": False,
+            "screen_path": "Telas/TL11710.asp",
+            "open_query": {"cd_empresa": company_code, "nr_ordserv": service.order_number},
+            "main_fields": {
+                "txtcd_empresa": company_code,
+                "txtnr_ordserv": service.order_number,
+                "txtcd_servico": service.service_code,
+                "txtcd_recurso": service.resource_code or "",
+                "txtqt_horas": service.spent_time,
+                "txtvl_hora": service.hourly_value,
+            },
+        }
+
+    client = make_logged_client(payload.credentials)
+    launcher = PerformedServiceLauncher(client)
+    try:
+        result = launcher.create(service, company_code=company_code)
+    except (FrotaWebError, ValueError, KeyError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    debug_dir = ROOT_DIR / "artifacts" / "api_responses"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    (debug_dir / f"servico_realizado_{stamp}.html").write_text(result.response.text, encoding="utf-8")
+    for name, response in result.related_responses.items():
+        (debug_dir / f"servico_realizado_{stamp}_{name}.html").write_text(
+            response.text,
+            encoding="utf-8",
+        )
+
+    return {
+        "created": result.ok,
+        "message": result.message,
+        "response_url": result.response.url,
+        "debug_response_file": str((debug_dir / f"servico_realizado_{stamp}.html").resolve()),
         "related": {
             name: {
                 "status": response.status,
