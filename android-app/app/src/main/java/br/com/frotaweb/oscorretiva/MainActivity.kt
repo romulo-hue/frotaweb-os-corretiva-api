@@ -30,6 +30,7 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -158,7 +159,7 @@ class MainActivity : Activity() {
             showMessage("Formato invalido", "Corrija os campos: ${invalid.joinToString(", ")}.")
             return
         }
-        if (!validateExitDate()) return
+        if (!validateOrderDates()) return
 
         val payload = buildOrderPayload()
         val id = store.insert(payload.toString())
@@ -347,17 +348,37 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun validateExitDate(): Boolean {
+    private fun validateOrderDates(): Boolean {
         val openingText = orderInputs["opening_datetime"]?.text?.toString()?.trim().orEmpty()
         val exitText = orderInputs["exit_datetime"]?.text?.toString()?.trim().orEmpty()
         val opening = parseDateTime(openingText)
         val exit = parseDateTime(exitText)
         if (opening == null || exit == null) return true
-        if (exit.after(opening)) {
-            orderInputs["exit_datetime"]?.error = "Saida nao pode ser maior que a entrada"
+        val now = Date()
+
+        if (opening.after(now)) {
+            orderInputs["opening_datetime"]?.error = "Entrada nao pode ser maior que hoje"
+            showMessage(
+                "Data de entrada invalida",
+                "A Entrada - Data/Hora nao pode ser maior que a data e hora de hoje."
+            )
+            return false
+        }
+
+        if (exit.after(now)) {
+            orderInputs["exit_datetime"]?.error = "Saida nao pode ser maior que hoje"
             showMessage(
                 "Data de saida invalida",
-                "A Saida - Data/Hora nao pode ser maior que a Entrada - Data/Hora."
+                "A Saida - Data/Hora nao pode ser maior que a data e hora de hoje."
+            )
+            return false
+        }
+
+        if (exit.before(opening)) {
+            orderInputs["exit_datetime"]?.error = "Saida nao pode ser menor que a entrada"
+            showMessage(
+                "Data de saida invalida",
+                "A Saida - Data/Hora nao pode ser menor que a Entrada - Data/Hora."
             )
             return false
         }
