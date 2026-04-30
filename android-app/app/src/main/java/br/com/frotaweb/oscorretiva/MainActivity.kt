@@ -189,6 +189,7 @@ class MainActivity : Activity() {
         addServiceInput(card, "plate", "Placa", "Ex.: SAX8C86", FieldFormat.TEXT, servicePlate(prefill))
         serviceInputs["vehicle_code"]?.isEnabled = false
         serviceInputs["plate"]?.isEnabled = false
+        card.addView(note("Recurso humano: ${loginRecurso().ifBlank { loginUsuario() }}"))
         addServiceInput(card, "service_code", "Servico *", "Ex.: 0", FieldFormat.INTEGER, prefill?.optString("service_code", ""))
         addServiceInput(card, "spent_time", "Tempo gasto", "000:00", FieldFormat.TIME, prefill?.optString("spent_time", "000:00"))
 
@@ -398,7 +399,7 @@ class MainActivity : Activity() {
         val json = JSONObject()
         json.put("_local_type", "SERVICE")
         json.put("order_number", activeOrderNumber)
-        json.put("resource_code", loginUsuario())
+        json.put("resource_code", loginRecurso().ifBlank { loginUsuario() })
         serviceInputs.forEach { (name, edit) ->
             val value = payloadValue(name, edit.text.toString().trim(), serviceFormats[name] ?: FieldFormat.TEXT)
             if (value.isNotEmpty()) json.put(name, value)
