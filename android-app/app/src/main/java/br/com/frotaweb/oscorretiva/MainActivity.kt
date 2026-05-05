@@ -148,7 +148,7 @@ class MainActivity : Activity() {
         addCheck(card, "return_service", "Retorno", prefill?.optBoolean("return_service", false) == true)
         addCheck(card, "scheduled", "Programada", prefill?.optBoolean("scheduled", false) == true)
 
-        val save = button("Salvar e enviar")
+        val save = button("Enviar para painel")
         save.setOnClickListener { saveAndSend() }
         card.addView(save)
 
@@ -263,7 +263,7 @@ class MainActivity : Activity() {
         val checked = checksDetail(payload)
         if (checked.isNotBlank()) card.addView(detailLine("Marcadores", checked))
 
-        if (order.status != "SYNCED") {
+        if (order.status == "PENDING" || order.status == "FAILED") {
             card.addView(button(if (type == "SERVICE") "Reenviar este servico" else "Reenviar esta O.S.").apply {
                 setOnClickListener { sendLocalRecord(order.id, JSONObject(order.payload)) }
             })
@@ -307,7 +307,7 @@ class MainActivity : Activity() {
         val payload = buildOrderPayload()
         val id = store.insert(payload.toString())
         if (!isOnline()) {
-            showMessage("Salvo offline", "Sem internet. A O.S. ficou pendente para sincronizacao.")
+            showMessage("Salvo offline", "Sem internet. A O.S. ficou pendente para enviar ao painel.")
             showOrderScreen()
             return
         }
@@ -322,7 +322,7 @@ class MainActivity : Activity() {
         }
         val pending = store.unsent()
         if (pending.isEmpty()) {
-            showMessage("Sincronizacao", "Nao ha O.S. pendente.")
+            showMessage("Sincronizacao", "Nao ha lancamento pendente.")
             return
         }
         pending.forEach { sendLocalRecord(it.id, JSONObject(it.payload)) }
@@ -343,7 +343,7 @@ class MainActivity : Activity() {
         val payload = buildServicePayload()
         val id = store.insert(payload.toString())
         if (!isOnline()) {
-            showMessage("Salvo offline", "Sem internet. O servico ficou pendente para sincronizacao.")
+            showMessage("Salvo offline", "Sem internet. O servico ficou pendente para enviar ao painel.")
             showServiceScreen()
             return
         }
@@ -353,21 +353,28 @@ class MainActivity : Activity() {
     private fun sendLocalRecord(id: Long, payload: JSONObject) {
         if (!hasCredentials()) return
         val isService = payload.optString("_local_type", "ORDER") == "SERVICE"
-        showLoading(if (isService) "Enviando servico..." else "Enviando O.S....")
+        showLoading(if (isService) "Enviando servico ao painel..." else "Enviando O.S. para o painel...")
         Thread {
             try {
-                val path = if (isService) "/os-corretiva/servicos?simulacao=false" else "/os-corretiva?simulacao=false"
+                val path = if (isService) "/panel/os/servicos" else "/panel/os"
                 val endpoint = "${currentApiUrl.ifBlank { normalizeApiBaseUrl(apiUrl.text.toString()) }}$path"
-                val response = postJson(
-                    endpoint,
-                    withCredentials(payload)
-                )
+                val response = postJson(endpoint, withCredentials(payload))
                 val body = response.asJsonOrThrow(endpoint)
+                val accepted = body.optBoolean("accepted", false)
                 val created = body.optBoolean("created", false)
                 val message = body.optString("message", body.optString("detail", response.body))
                 runOnUiThread {
                     hideLoading()
-                    if (created) {
+                    if (accepted) {
+                        val panelId = body.optString("panel_id")
+                        store.markPanelSent(id, panelId)
+                        showMessage("Salvo no painel", message)
+                        if (isService) {
+                            showServiceScreen()
+                        } else {
+                            showOrderScreen()
+                        }
+                    } else if (created) {
                         val orderNumber = body.optString("order_number")
                         store.markSynced(id, orderNumber)
                         if (!isService && orderNumber.isNotBlank()) {
@@ -439,7 +446,7 @@ class MainActivity : Activity() {
             put("empresa", loginEmpresa())
             put("filial", loginFilial())
             put("usuario", loginUsuario())
-            put("recurso", loginRecurso().ifBlank { loginUsuario() })
+            put("recurso_humano", loginRecurso().ifBlank { loginUsuario() })
             put("senha", currentPassword)
         })
         return json
@@ -533,7 +540,7 @@ class MainActivity : Activity() {
         if (url.endsWith("/")) url = url.trimEnd('/')
         url = url.substringBefore("?")
         val lower = url.lowercase()
-        val suffixes = listOf("/docs", "/redoc", "/openapi.json", "/os-corretiva")
+        val suffixes = listOf("/docs", "/redoc", "/openapi.json", "/ui", "/ui/", "/panel/os/servicos", "/panel/os", "/panel", "/os-corretiva/servicos", "/os-corretiva")
         suffixes.forEach { suffix ->
             if (lower.endsWith(suffix)) {
                 url = url.dropLast(suffix.length).trimEnd('/')
@@ -729,6 +736,7 @@ class MainActivity : Activity() {
 
     private fun statusText(status: String): String = when (status) {
         "SYNCED" -> "Sincronizado"
+        "PANEL_SENT" -> "Enviada ao painel"
         "FAILED" -> "Com erro"
         else -> "Pendente"
     }
@@ -1147,6 +1155,7 @@ class OrderStore(context: Context) : SQLiteOpenHelper(context, "orders.db", null
     }
 
     fun markSynced(id: Long, orderNumber: String) = update(id, "SYNCED", null, orderNumber)
+    fun markPanelSent(id: Long, panelId: String) = update(id, "PANEL_SENT", null, "Painel #$panelId")
     fun markFailed(id: Long, error: String) = update(id, "FAILED", error, null)
     fun markPending(id: Long, error: String) = update(id, "PENDING", error, null)
     fun delete(id: Long) {

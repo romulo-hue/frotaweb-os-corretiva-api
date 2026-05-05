@@ -14,12 +14,14 @@ from pydantic import BaseModel, Field, ConfigDict
 from frotaweb import CorrectiveOrder, CorrectiveOrderService, FrotaWebClient, FrotaWebError
 from frotaweb import PerformedService, PerformedServiceLauncher
 from frotaweb.os_correctiva import order_value, order_value_with_number, render_mapping
+from api.panel_store import PanelStore
 from scripts._env import load_dotenv
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 MAPPING_PATH = ROOT_DIR / "config" / "os_correctiva.tl11800.json"
 STATIC_DIR = ROOT_DIR / "static"
+PANEL_DB_PATH = ROOT_DIR / "data" / "panel.db"
 
 
 class FrotaWebCredentials(BaseModel):
@@ -90,6 +92,20 @@ class LoginStatus(BaseModel):
     missing_env: list[str]
 
 
+class PanelLaunchRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    credentials: FrotaWebCredentials = Field(..., alias="credenciais")
+
+
+class PanelBatchLaunchRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    order_ids: list[int]
+    credentials: FrotaWebCredentials = Field(..., alias="credenciais")
+
+
+panel_store = PanelStore(PANEL_DB_PATH)
+
+
 app = FastAPI(
     title="FrotaWeb Local API",
     version="0.1.0",
@@ -125,6 +141,146 @@ def mapping_tl11800() -> dict[str, Any]:
 
 if STATIC_DIR.exists():
     app.mount("/ui", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
+
+
+@app.post("/panel/os")
+def panel_create_order(payload: CorrectiveOrderRequest) -> dict[str, Any]:
+    payload_data = payload.model_dump(exclude_none=True, by_alias=False)
+    credentials = payload_data.pop("credentials", None) or {}
+    record = panel_store.create_order(
+        kind="ORDER",
+        payload=with_tl11800_defaults(payload_data),
+        submitted_by=str(credentials.get("usuario", "")),
+        source="android" if payload.raw_fields.get("origem") == "android" else "web",
+    )
+    return {
+        "accepted": True,
+        "panel_id": str(record["id"]),
+        "created": False,
+        "message": "O.S. recebida pelo painel e aguardando lancamento no FrotaWeb.",
+        "status": record["status"],
+    }
+
+
+@app.post("/panel/os/servicos")
+def panel_create_service(payload: PerformedServiceRequest) -> dict[str, Any]:
+    payload_data = payload.model_dump(exclude_none=True, by_alias=False)
+    credentials = payload_data.pop("credentials", None) or {}
+    record = panel_store.create_order(
+        kind="SERVICE",
+        payload=payload_data,
+        submitted_by=str(credentials.get("usuario", "")),
+        source="android" if payload.raw_fields.get("origem") == "android" else "web",
+        linked_order_number=payload.order_number,
+    )
+    return {
+        "accepted": True,
+        "panel_id": str(record["id"]),
+        "created": False,
+        "message": "Servico recebido pelo painel e aguardando lancamento no FrotaWeb.",
+        "status": record["status"],
+    }
+
+
+@app.get("/panel/os")
+def panel_list_orders(
+    kind: str | None = Query(None, description="ORDER ou SERVICE"),
+    status: str | None = Query(None, description="PENDING_REVIEW, FAILED ou LAUNCHED"),
+) -> dict[str, Any]:
+    return {"items": panel_store.list_orders(kind=kind, status=status)}
+
+
+@app.post("/panel/os/{order_id}/launch")
+def launch_panel_order(
+    order_id: int,
+    payload: PanelLaunchRequest,
+) -> dict[str, Any]:
+    try:
+        record = panel_store.get_order(order_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Registro do painel {order_id} nao encontrado.") from exc
+
+    if record["kind"] == "SERVICE":
+        request_payload = PerformedServiceRequest.model_validate(
+            {"credenciais": payload.credentials.model_dump(by_alias=True), **record["payload"]}
+        )
+        try:
+            result = create_performed_service(request_payload, dry_run=False)
+        except HTTPException as exc:
+            message = str(exc.detail)
+            panel_store.mark_failed(order_id, message)
+            return {
+                "panel_id": order_id,
+                "created": False,
+                "message": message,
+                "order_number": record["linked_order_number"],
+            }
+        except Exception as exc:  # pragma: no cover
+            message = str(exc)
+            panel_store.mark_failed(order_id, message)
+            return {
+                "panel_id": order_id,
+                "created": False,
+                "message": message,
+                "order_number": record["linked_order_number"],
+            }
+        if result.get("created"):
+            panel_store.mark_launched(order_id, order_number=record["linked_order_number"], message=result.get("message", ""))
+        else:
+            panel_store.mark_failed(order_id, result.get("message", "Falha ao lancar servico."))
+        return {
+            "panel_id": order_id,
+            "created": bool(result.get("created")),
+            "message": result.get("message", ""),
+            "order_number": record["linked_order_number"],
+        }
+
+    request_payload = CorrectiveOrderRequest.model_validate(
+        {"credenciais": payload.credentials.model_dump(by_alias=True), **record["payload"]}
+    )
+    try:
+        result = create_corrective_order(request_payload, dry_run=False)
+    except HTTPException as exc:
+        message = str(exc.detail)
+        panel_store.mark_failed(order_id, message)
+        return {
+            "panel_id": order_id,
+            "created": False,
+            "message": message,
+            "order_number": "",
+        }
+    except Exception as exc:  # pragma: no cover
+        message = str(exc)
+        panel_store.mark_failed(order_id, message)
+        return {
+            "panel_id": order_id,
+            "created": False,
+            "message": message,
+            "order_number": "",
+        }
+
+    order_number = str(result.get("order_number", "") or "")
+    if result.get("created"):
+        panel_store.mark_launched(order_id, order_number=order_number, message=result.get("message", ""))
+    else:
+        panel_store.mark_failed(order_id, result.get("message", "Falha ao lancar O.S."))
+    return {
+        "panel_id": order_id,
+        "created": bool(result.get("created")),
+        "message": result.get("message", ""),
+        "order_number": order_number,
+    }
+
+
+@app.post("/panel/os/launch-batch")
+def launch_panel_orders_batch(payload: PanelBatchLaunchRequest) -> dict[str, Any]:
+    launch_payload = PanelLaunchRequest(credentials=payload.credentials)
+    results = [launch_panel_order(order_id, launch_payload) for order_id in payload.order_ids]
+    return {
+        "results": results,
+        "success_count": sum(1 for item in results if item.get("created")),
+        "failure_count": sum(1 for item in results if not item.get("created")),
+    }
 
 
 @app.post("/os-corretiva")

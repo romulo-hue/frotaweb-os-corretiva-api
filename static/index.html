@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FrotaWeb - OS Corretiva</title>
+    <title>FrotaWeb - Painel O.S.</title>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <main class="app-shell">
       <section class="topbar">
         <div>
-          <h1>Lancamento de O.S. corretiva</h1>
-          <p>TL11800 - Realizacao de Manutencao Corretiva. Cada lancamento usa o login informado abaixo.</p>
+          <h1>Painel de O.S. corretiva</h1>
+          <p>Receba lancamentos, revise os dados e dispare o envio ao FrotaWeb com o retorno de erro visivel.</p>
         </div>
         <div class="api-status" id="api-status">Verificando API...</div>
       </section>
@@ -19,30 +19,30 @@
       <section class="layout">
         <form id="order-form" class="panel form-panel">
           <div class="panel-heading">
-            <h2>Login FrotaWeb</h2>
-            <span class="required-note">Usado somente nesta requisicao</span>
+            <h2>Novo lancamento no painel</h2>
+            <span class="required-note">Login usado apenas quando voce lancar ao FrotaWeb</span>
           </div>
 
           <div class="credentials-grid">
             <div class="field" data-name="empresa">
               <label for="empresa"><span>Empresa <span class="required">*</span></span></label>
               <input type="text" id="empresa" name="empresa" autocomplete="organization" placeholder="1" required>
-              <small>FrotaWeb login: txtcd_empresa</small>
+              <small>Usado no lancamento ao FrotaWeb</small>
             </div>
             <div class="field" data-name="filial">
               <label for="filial"><span>Filial <span class="required">*</span></span></label>
               <input type="text" id="filial" name="filial" autocomplete="off" placeholder="1" required>
-              <small>FrotaWeb login: txtcd_filial</small>
+              <small>Usado no lancamento ao FrotaWeb</small>
             </div>
             <div class="field" data-name="usuario">
               <label for="usuario"><span>Usuario <span class="required">*</span></span></label>
               <input type="text" id="usuario" name="usuario" autocomplete="username" required>
-              <small>FrotaWeb login: txtcd_usuario</small>
+              <small>Usado no lancamento ao FrotaWeb</small>
             </div>
             <div class="field" data-name="senha">
               <label for="senha"><span>Senha <span class="required">*</span></span></label>
               <input type="password" id="senha" name="senha" autocomplete="current-password" required>
-              <small>A senha nao aparece no preview nem na resposta</small>
+              <small>A senha nao aparece no preview nem no resultado</small>
             </div>
           </div>
 
@@ -65,22 +65,31 @@
           <div class="actions">
             <label class="toggle">
               <input type="checkbox" id="dry-run" checked>
-              Simular antes de gravar
+              Simular direto no FrotaWeb
             </label>
             <button type="button" id="fill-example">Carregar exemplo 1830</button>
-            <button type="submit" class="primary">Enviar para API</button>
+            <button type="submit" class="primary">Salvar no painel</button>
           </div>
         </form>
 
         <aside class="panel side-panel">
           <div class="panel-heading">
+            <h2>Fila do painel</h2>
+            <span id="mode-label">pendentes</span>
+          </div>
+          <div class="queue-actions">
+            <button type="button" id="refresh-queue">Atualizar fila</button>
+            <button type="button" id="launch-selected" class="primary">Lancar selecionadas</button>
+          </div>
+          <div id="queue-list" class="queue-list"></div>
+
+          <div class="panel-heading result-heading">
             <h2>JSON gerado</h2>
-            <span id="mode-label">simulacao</span>
           </div>
           <pre id="json-preview">{}</pre>
 
           <div class="panel-heading result-heading">
-            <h2>Resposta da API</h2>
+            <h2>Resultado</h2>
           </div>
           <pre id="result-preview">Aguardando envio.</pre>
         </aside>

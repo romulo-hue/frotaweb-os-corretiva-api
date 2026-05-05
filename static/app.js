@@ -1,140 +1,26 @@
 const API_BASE = window.location.origin;
 
 const fields = [
-  {
-    name: "vehicle_code",
-    label: "Veiculo",
-    frota: "txtcd_veiculo",
-    required: true,
-    placeholder: "1830",
-  },
-  {
-    name: "plate",
-    label: "Placa",
-    frota: "txtplaca",
-    placeholder: "THP2B33",
-  },
-  {
-    name: "defect_description",
-    label: "Reclamacao livre",
-    frota: "TL11802.edtobserv",
-    required: true,
-    wide: true,
-    textarea: true,
-    placeholder: "Descreva a falha informada pela operacao",
-  },
-  {
-    name: "opening_datetime",
-    label: "Entrada - Data/Hora",
-    frota: "txtdh_entrada",
-    required: true,
-    placeholder: "12/03/2026 15:45:00",
-  },
-  {
-    name: "entry_hourmeter",
-    label: "Entrada - Horimetro",
-    frota: "txtqt_hr_ent",
-    required: true,
-    placeholder: "0.00",
-  },
-  {
-    name: "odometer",
-    label: "Entrada - Km",
-    frota: "txtqt_km_ent",
-    required: true,
-    placeholder: "5",
-  },
-  {
-    name: "exit_datetime",
-    label: "Saida - Data/Hora",
-    frota: "txtdh_saida",
-    required: true,
-    placeholder: "12/03/2026 15:55:00",
-  },
-  {
-    name: "exit_hourmeter",
-    label: "Saida - Horimetro",
-    frota: "txtqt_hr_sai",
-    required: true,
-    placeholder: "0.00",
-  },
-  {
-    name: "exit_odometer",
-    label: "Saida - Km",
-    frota: "txtqt_km_sai",
-    required: true,
-    placeholder: "5",
-  },
-  {
-    name: "start_datetime",
-    label: "Data prevista para inicio",
-    frota: "txtdh_inicio",
-    required: true,
-    placeholder: "12/03/2026 15:45:00",
-  },
-  {
-    name: "expected_release_datetime",
-    label: "Data prevista de liberacao",
-    frota: "txtdh_prev",
-    required: true,
-    placeholder: "12/03/2026 15:55:00",
-  },
-  {
-    name: "expected_hours",
-    label: "Horas previstas",
-    frota: "txtqt_hr_prev",
-    required: true,
-    placeholder: "0.00",
-  },
-  {
-    name: "actual_hours",
-    label: "Horas realizadas",
-    frota: "txtqt_hr_rea",
-    placeholder: "0.00",
-  },
-  {
-    name: "branch_code",
-    label: "Filial",
-    frota: "txtcd_filial / hidcd_filialVeic",
-    placeholder: "4",
-  },
-  {
-    name: "department_code",
-    label: "Departamento",
-    frota: "txtcd_ccusto / hidcd_ccustoveic",
-    placeholder: "420115",
-  },
-  {
-    name: "occurrence_number",
-    label: "Ocorrencia",
-    frota: "txtnr_ocorr",
-    placeholder: "0",
-  },
-  {
-    name: "driver_code",
-    label: "Motorista",
-    frota: "txtcd_moto",
-    placeholder: "0",
-  },
-  {
-    name: "surcharge_value",
-    label: "Valor acrescimo",
-    frota: "txtvl_acresc",
-    placeholder: "0",
-  },
-  {
-    name: "return_order_number",
-    label: "O.S retorno",
-    frota: "txtnr_os_ret",
-    placeholder: "0",
-  },
-  {
-    name: "observations",
-    label: "Observacao",
-    frota: "txtnm_observ",
-    maxLength: 50,
-    placeholder: "Maximo 50 caracteres",
-  },
+  { name: "vehicle_code", label: "Veiculo", frota: "txtcd_veiculo", required: true, placeholder: "1830" },
+  { name: "plate", label: "Placa", frota: "txtplaca", placeholder: "THP2B33" },
+  { name: "defect_description", label: "Reclamacao livre", frota: "TL11802.edtobserv", required: true, wide: true, textarea: true, placeholder: "Descreva a falha informada pela operacao" },
+  { name: "opening_datetime", label: "Entrada - Data/Hora", frota: "txtdh_entrada", required: true, placeholder: "12/03/2026 15:45:00" },
+  { name: "entry_hourmeter", label: "Entrada - Horimetro", frota: "txtqt_hr_ent", required: true, placeholder: "0.00" },
+  { name: "odometer", label: "Entrada - Km", frota: "txtqt_km_ent", required: true, placeholder: "5" },
+  { name: "exit_datetime", label: "Saida - Data/Hora", frota: "txtdh_saida", required: true, placeholder: "12/03/2026 15:55:00" },
+  { name: "exit_hourmeter", label: "Saida - Horimetro", frota: "txtqt_hr_sai", required: true, placeholder: "0.00" },
+  { name: "exit_odometer", label: "Saida - Km", frota: "txtqt_km_sai", required: true, placeholder: "5" },
+  { name: "start_datetime", label: "Data prevista para inicio", frota: "txtdh_inicio", required: true, placeholder: "12/03/2026 15:45:00" },
+  { name: "expected_release_datetime", label: "Data prevista de liberacao", frota: "txtdh_prev", required: true, placeholder: "12/03/2026 15:55:00" },
+  { name: "expected_hours", label: "Horas previstas", frota: "txtqt_hr_prev", required: true, placeholder: "0.00" },
+  { name: "actual_hours", label: "Horas realizadas", frota: "txtqt_hr_rea", placeholder: "0.00" },
+  { name: "branch_code", label: "Filial", frota: "txtcd_filial / hidcd_filialVeic", placeholder: "4" },
+  { name: "department_code", label: "Departamento", frota: "txtcd_ccusto / hidcd_ccustoveic", placeholder: "420115" },
+  { name: "occurrence_number", label: "Ocorrencia", frota: "txtnr_ocorr", placeholder: "0" },
+  { name: "driver_code", label: "Motorista", frota: "txtcd_moto", placeholder: "0" },
+  { name: "surcharge_value", label: "Valor acrescimo", frota: "txtvl_acresc", placeholder: "0" },
+  { name: "return_order_number", label: "O.S retorno", frota: "txtnr_os_ret", placeholder: "0" },
+  { name: "observations", label: "Observacao", frota: "txtnm_observ", maxLength: 50, placeholder: "Maximo 50 caracteres" },
 ];
 
 const examplePayload = {
@@ -168,6 +54,9 @@ const dryRun = document.querySelector("#dry-run");
 const modeLabel = document.querySelector("#mode-label");
 const statusBox = document.querySelector("#api-status");
 const fillExample = document.querySelector("#fill-example");
+const queueList = document.querySelector("#queue-list");
+const refreshQueueButton = document.querySelector("#refresh-queue");
+const launchSelectedButton = document.querySelector("#launch-selected");
 const credentialNames = ["empresa", "filial", "usuario", "senha"];
 
 function createFields() {
@@ -206,6 +95,7 @@ function payloadFromForm() {
     const value = form.elements[name].value.trim();
     if (value !== "") credentials[name] = value;
   }
+  if (credentials.usuario) credentials.recurso_humano = credentials.usuario;
   if (Object.keys(credentials).length > 0) payload.credentials = credentials;
 
   for (const field of fields) {
@@ -229,8 +119,8 @@ function previewPayloadFromForm() {
 }
 
 function updatePreview() {
-  modeLabel.textContent = dryRun.checked ? "simulacao" : "gravacao real";
-  modeLabel.className = dryRun.checked ? "" : "warning";
+  modeLabel.textContent = "pendentes";
+  modeLabel.className = "";
   jsonPreview.textContent = JSON.stringify(previewPayloadFromForm(), null, 2);
 }
 
@@ -246,13 +136,6 @@ function fillFromPayload(payload) {
 
 function markInvalidFields() {
   let ok = true;
-  for (const name of credentialNames) {
-    const wrapper = form.querySelector(`[data-name="${name}"]`);
-    const input = form.elements[name];
-    const invalid = input.value.trim() === "";
-    wrapper.classList.toggle("invalid", invalid);
-    if (invalid) ok = false;
-  }
   for (const field of fields) {
     const wrapper = grid.querySelector(`[data-name="${field.name}"]`);
     const input = form.elements[field.name];
@@ -275,40 +158,40 @@ async function checkApi() {
   }
 }
 
+function credentialsFromForm() {
+  const credentials = {};
+  for (const name of credentialNames) {
+    const value = form.elements[name].value.trim();
+    if (value === "") {
+      throw new Error("Preencha empresa, filial, usuario e senha para lancar ao FrotaWeb.");
+    }
+    credentials[name] = value;
+  }
+  credentials.recurso_humano = credentials.usuario;
+  return credentials;
+}
+
 async function submitOrder(event) {
   event.preventDefault();
-  resultPreview.textContent = "Enviando...";
+  resultPreview.textContent = "Enviando para o painel...";
 
   if (!markInvalidFields()) {
     resultPreview.textContent = "Preencha os campos obrigatorios marcados com *.";
     return;
   }
 
-  if (!dryRun.checked) {
-    const confirmed = window.confirm("Confirmar gravacao real da O.S. corretiva no FrotaWeb?");
-    if (!confirmed) {
-      resultPreview.textContent = "Gravacao real cancelada.";
-      return;
-    }
-  }
-
   const submitButton = form.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   try {
-    const response = await fetch(`${API_BASE}/os-corretiva?simulacao=${dryRun.checked}`, {
+    const response = await fetch(`${API_BASE}/panel/os`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payloadFromForm()),
     });
-    const text = await response.text();
-    let body;
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = text;
-    }
+    const body = await response.json();
     resultPreview.textContent = JSON.stringify(body, null, 2);
     resultPreview.className = response.ok ? "success" : "error";
+    await refreshQueue();
   } catch (error) {
     resultPreview.textContent = `Falha ao chamar API: ${error.message}`;
     resultPreview.className = "error";
@@ -317,13 +200,115 @@ async function submitOrder(event) {
   }
 }
 
+function queueCardText(item) {
+  const payload = item.payload || {};
+  const title = item.kind === "SERVICE"
+    ? `Servico O.S. ${payload.order_number || item.linked_order_number || "-"}`
+    : `O.S. veiculo ${payload.vehicle_code || "-"}`;
+  const second = item.kind === "SERVICE"
+    ? `Servico ${payload.service_code || "-"}`
+    : `${payload.plate || "-"} | ${payload.opening_datetime || "-"}`;
+  const status = item.status === "LAUNCHED" ? "LANCADA" : item.status === "FAILED" ? "COM ERRO" : "PENDENTE";
+  const orderInfo = item.launched_order_number ? ` | O.S. ${item.launched_order_number}` : "";
+  return `${status} - #${item.id} - ${title}${orderInfo}\n${second}`;
+}
+
+function renderQueue(items) {
+  queueList.innerHTML = "";
+  if (!items.length) {
+    queueList.innerHTML = `<div class="queue-empty">Nenhum lancamento no painel.</div>`;
+    return;
+  }
+  for (const item of items) {
+    const row = document.createElement("label");
+    row.className = `queue-item ${item.status.toLowerCase()}`;
+    row.innerHTML = `
+      <input type="checkbox" value="${item.id}" ${item.status === "LAUNCHED" ? "disabled" : ""}>
+      <div>
+        <strong>${queueCardText(item).split("\n")[0]}</strong>
+        <div>${queueCardText(item).split("\n")[1] || ""}</div>
+        ${item.error_message ? `<small>${item.error_message}</small>` : ""}
+      </div>
+    `;
+    queueList.appendChild(row);
+  }
+}
+
+async function refreshQueue() {
+  const response = await fetch(`${API_BASE}/panel/os`);
+  const body = await response.json();
+  renderQueue(body.items || []);
+}
+
+function selectedQueueIds() {
+  return [...queueList.querySelectorAll('input[type="checkbox"]:checked')].map((node) => Number(node.value));
+}
+
+function formatLaunchResult(body) {
+  const lines = [];
+  if (typeof body.success_count === "number") {
+    lines.push(`Sucesso: ${body.success_count} | Falha: ${body.failure_count ?? 0}`);
+    lines.push("");
+  }
+  for (const item of body.results || []) {
+    lines.push(`${item.created ? "[OK]" : "[ERRO]"} painel #${item.panel_id}`);
+    if (item.order_number) lines.push(`O.S.: ${item.order_number}`);
+    if (item.message) lines.push(`Mensagem: ${item.message}`);
+    lines.push("");
+  }
+  return lines.join("\n").trim() || JSON.stringify(body, null, 2);
+}
+
+async function launchSelected() {
+  const ids = selectedQueueIds();
+  if (!ids.length) {
+    resultPreview.textContent = "Selecione pelo menos um lancamento pendente.";
+    resultPreview.className = "error";
+    return;
+  }
+  if (dryRun.checked) {
+    resultPreview.textContent = "Desligue a simulacao para lancar ao FrotaWeb.";
+    resultPreview.className = "error";
+    return;
+  }
+
+  let credentials;
+  try {
+    credentials = credentialsFromForm();
+  } catch (error) {
+    resultPreview.textContent = error.message;
+    resultPreview.className = "error";
+    return;
+  }
+
+  resultPreview.textContent = "Lancando no FrotaWeb...";
+  launchSelectedButton.disabled = true;
+  try {
+    const response = await fetch(`${API_BASE}/panel/os/launch-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order_ids: ids, credenciais: credentials }),
+    });
+    const text = await response.text();
+    const body = JSON.parse(text);
+    resultPreview.textContent = formatLaunchResult(body);
+    resultPreview.className = response.ok ? "success" : "error";
+    await refreshQueue();
+  } catch (error) {
+    resultPreview.textContent = `Falha ao lancar no FrotaWeb: ${error.message}`;
+    resultPreview.className = "error";
+  } finally {
+    launchSelectedButton.disabled = false;
+  }
+}
+
 createFields();
-fillFromPayload(examplePayload);
+updatePreview();
 checkApi();
+refreshQueue();
 
 form.addEventListener("submit", submitOrder);
-for (const name of credentialNames) {
-  form.elements[name].addEventListener("input", updatePreview);
-}
-dryRun.addEventListener("change", updatePreview);
 fillExample.addEventListener("click", () => fillFromPayload(examplePayload));
+refreshQueueButton.addEventListener("click", refreshQueue);
+launchSelectedButton.addEventListener("click", launchSelected);
+dryRun.addEventListener("change", updatePreview);
