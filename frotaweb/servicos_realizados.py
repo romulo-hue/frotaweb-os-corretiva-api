@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Mapping
 
 from .client import FrotaWebClient, HttpResponse, extract_alerts
@@ -104,8 +105,13 @@ class PerformedServiceLauncher:
         iis_error = extract_iis_error(response.text)
         alerts = extract_alerts(response.text)
         session_ok = self.client.check_session()
-        ok = not alerts and not iis_error and session_ok
-        if iis_error:
+        verified_by_history, history_responses = self._verify_saved_in_history(service, company_code)
+        responses.update(history_responses)
+
+        ok = verified_by_history or (not alerts and not iis_error and session_ok)
+        if verified_by_history:
+            message = "Servico realizado enviado e confirmado no historico da O.S."
+        elif iis_error:
             message = "Erro IIS do FrotaWeb ao salvar servico: " + iis_error
         elif alerts:
             message = " | ".join(alerts)
@@ -149,6 +155,37 @@ class PerformedServiceLauncher:
         if not forms:
             raise ValueError("Nenhum formulario encontrado na TL11710.")
         return forms[0]
+
+    def _verify_saved_in_history(
+        self,
+        service: PerformedService,
+        company_code: str,
+    ) -> tuple[bool, dict[str, HttpResponse]]:
+        responses: dict[str, HttpResponse] = {}
+        try:
+            popup = self.client.post(
+                "lupas/g_histserv.asp",
+                data={
+                    "hidpb_tela": "11710",
+                    "hidbl_empresa": "True",
+                    "hidbl_lupasec": "False",
+                    "txtnr_ordserv": service.order_number,
+                    "txtnr_nf": "0",
+                    "txtnr_ser": "",
+                },
+            )
+            responses["history_popup"] = popup
+            match = re.search(r"xmls/[^\"']+\.xml", popup.text, flags=re.IGNORECASE)
+            if not match:
+                return False, responses
+
+            xml_response = self.client.get(match.group(0))
+            responses["history_xml"] = xml_response
+            target_service_code = normalize_number(service.service_code).split(".", 1)[0]
+            pattern = rf'cd_servico="{re.escape(target_service_code)}"[^>]*nr_ordserv="{re.escape(service.order_number)}"'
+            return bool(re.search(pattern, xml_response.text, flags=re.IGNORECASE)), responses
+        except Exception:
+            return False, responses
 
 
 def optional_str(value: Any) -> str | None:
